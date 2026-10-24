@@ -2,6 +2,18 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.8.0] - 2026-10-24
+
+### 变更（滑条按已装 Codex 的真实 CSS 重写，模块 `_1bucx` 逐条提取）
+
+- **轨道**：14 → **24px** 高、圆角 999 → **12px**、底色 `color-mix(text 10%)` + **0.5px 内描边** + **135° 斜纹纹理**（官方 repeating-gradient）、overflow hidden。
+- **填充**：圆角 999 → **12px 0 0 12px（左圆右直）**，官方 Range 几何。
+- **旋钮**：28px 白底 + **0.5px 描边** + **极轻阴影（0 0 2px 10% 黑，官方值）**；从轨道内移到 Root 层——官方 ThumbInput 就在 Root，28px 旋钮不被 24px 轨道裁剪。
+- **刻度点回归**：官方 TickRail 4px 圆点（中间档位），带官方多段过渡（background/opacity/filter/transform/translate 分离时长）。
+- **缓动换官方值**：`0.3s cubic-bezier(0.23,1,0.32,1)`（原 .22,1,.36,1 / 280ms）。
+- **容器**：官方 Container 32px 列布局（margin-inline 2px、padding 2px 6px）。
+- 星点为官方 canvas 粒子层（FastTrackParticles/MaxBurst 懒加载模块）的 DOM 近似，保留固定槽位淡入淡出方案。
+
 ## [0.7.0] - 2026-10-24
 
 ### 修复

@@ -47,7 +47,7 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.7.0'
+    const VERSION = '0.8.0'
     const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
     const CSS = `
@@ -167,7 +167,9 @@ window.__ModuleLoader__.load({
 }
 .dsh-power-refresh:active { transform: rotate(180deg); }
 
-/* 滑条区：官方 headline 样式的小节标题 + 14px 轨道 / 28px 旋钮（Codex 比例） */
+/* 滑条区：官方 headline 样式的小节标题 + Codex _1bucx 实测规格
+   （Container 32px / Root 28px / Track 24px r12 带内描边与斜纹 /
+     Thumb 28px 白底极轻阴影 / Tick 4px / easing .23,1,.32,1） */
 .dsh-power-slider-caption {
   font-size: 12px;
   line-height: 20px;
@@ -176,39 +178,57 @@ window.__ModuleLoader__.load({
   animation: dsh-power-fade 220ms ease both;
 }
 .dsh-power-slider-section { animation: dsh-power-fade 220ms ease both; }
-.dsh-power-slider { animation: dsh-power-fade 220ms ease both; }
 @keyframes dsh-power-fade { from { opacity: 0; } to { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .dsh-power-slider { animation: none; } }
-.dsh-power-hitzone {
+@media (prefers-reduced-motion: reduce) { .dsh-power-slider-section { animation: none; } }
+/* _Container_1bucx_1：32px 列容器 */
+.dsh-power-slider {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 32px;
+  margin-inline: 2px;
+  padding-block: 2px;
+  padding-inline: 6px;
   position: relative;
-  cursor: pointer;
-  touch-action: none;
-  padding: 10px 0;
-  margin: 0 -4px;
 }
+/* _Root_1bucx_19：28px 行根，motion 变量与官方一致 */
+.dsh-power-hitzone {
+  --dsh-power-motion-duration: 0.3s;
+  --dsh-power-motion-easing: cubic-bezier(0.23, 1, 0.32, 1);
+  align-items: center;
+  width: 100%;
+  height: 28px;
+  touch-action: none;
+  display: flex;
+  position: relative;
+  cursor: var(--cursor-interaction, pointer);
+}
+.dsh-power-hitzone:focus-visible { outline: 2px solid rgba(77, 107, 254, 0.65); outline-offset: 2px; border-radius: 12px; }
+/* _Track_1bucx_48：24px 高、r12、text 10% 底、.5px 内描边、135° 斜纹 */
 .dsh-power-track {
   position: relative;
-  height: 14px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.09);
-  transition: background 160ms ease, box-shadow 200ms ease;
+  flex-grow: 1;
+  height: 24px;
+  border-radius: 12px;
+  background:
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0, rgba(255, 255, 255, 0.05) 2px, transparent 2px, transparent 8px),
+    color-mix(in srgb, rgba(232, 238, 250, 1) 10%, transparent);
+  box-shadow: inset 0 0 0 0.5px var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.12));
+  overflow: hidden;
 }
-.dsh-power-hitzone:hover .dsh-power-track {
-  background: rgba(255, 255, 255, 0.13);
-  box-shadow: 0 0 0 4px rgba(77, 107, 254, 0.12);
-}
-.dsh-power-hitzone:focus-visible { outline: 2px solid rgba(77, 107, 254, 0.65); outline-offset: 3px; border-radius: 12px; }
+/* _Range_1bucx_239：填充左圆右直，几何对齐官方 */
 .dsh-power-fill {
   position: absolute;
   inset: 0 auto 0 0;
-  border-radius: 999px;
+  border-radius: 12px 0 0 12px;
   background: linear-gradient(90deg, #4d6bfe 0%, #5e84ff 55%, #8fb0ff 100%);
-  transition: width 280ms ${EASE};
+  transition: width var(--dsh-power-motion-duration, 0.3s) var(--dsh-power-motion-easing, ease);
 }
 /* 拖拽/滚动中：fill 与旋钮的位移不走过渡，1:1 跟手 */
 .dsh-power-hitzone[data-live="true"] .dsh-power-fill { transition: none; }
 .dsh-power-hitzone[data-live="true"] .dsh-power-knob { transition: box-shadow 160ms ease, transform 160ms ${EASE}; }
-/* 星点：固定 5 槽位，按填充比例淡入淡出（不重挂载，无闪烁） */
+/* 星点：固定 5 槽位，按填充比例淡入淡出（不重挂载，无闪烁）；
+   官方是 canvas 粒子层（FastTrackParticles/MaxBurst），DOM 近似 */
 .dsh-power-star {
   position: absolute;
   top: 50%;
@@ -234,6 +254,20 @@ window.__ModuleLoader__.load({
   .dsh-power-star { transition: opacity 120ms ease; transform: none; animation: none; }
   .dsh-power-star[data-on="true"] { opacity: 0.8; }
 }
+/* _Tick_1bucx_40：4px 刻度点，多段过渡 */
+.dsh-power-tick {
+  position: absolute;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.5));
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  transition: background-color var(--dsh-power-motion-duration, 0.3s) var(--dsh-power-motion-easing, ease),
+    opacity 0.2s ease-in-out, filter 0.12s ease, transform 0.12s ease;
+}
+/* _Thumb_1bucx_12 + _ThumbScale：28px 白底、.5px 边、极轻阴影（官方 0 0 2px #0000001a） */
 .dsh-power-knob {
   position: absolute;
   top: 50%;
@@ -241,10 +275,11 @@ window.__ModuleLoader__.load({
   height: 28px;
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.2);
+  border: 0.5px solid var(--dsw-alias-border-strong, rgba(255, 255, 255, 0.25));
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.1);
   transform: translate(-50%, -50%) scale(1);
   transition:
-    left 280ms ${EASE},
+    left var(--dsh-power-motion-duration, 0.3s) var(--dsh-power-motion-easing, ease),
     transform 200ms ${EASE},
     box-shadow 200ms ease;
   will-change: left;
@@ -567,6 +602,17 @@ window.__ModuleLoader__.load({
                 },
               }, STAR_SVG)),
             ),
+            // 官方 TickRail：中间档位 4px 刻度点（首尾不画）
+            count > 2 && efforts.map((effort, index) => (
+              index !== 0 && index !== count - 1
+                ? h('span', {
+                  key: `tick-${effort.id ?? index}`,
+                  className: 'dsh-power-tick',
+                  style: { left: `${stopPosition(index, count)}%` },
+                })
+                : null
+            )),
+            // 官方 ThumbInput 在 Root 层而非 Track 内：28px 旋钮不被 24px 轨道裁剪
             h('div', { className: 'dsh-power-knob', style: { left: `${fill}%` } }),
           ),
         ),
