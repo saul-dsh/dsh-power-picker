@@ -47,7 +47,7 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.6.2'
+    const VERSION = '0.6.3'
     const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
     const CSS = `
@@ -107,8 +107,8 @@ window.__ModuleLoader__.load({
   padding: 12px;
   border: 0;
   border-radius: var(--dsw-radius-lg, 14px);
-  background: var(--dsw-specific-menu, rgba(28, 28, 34, 0.97));
-  backdrop-filter: var(--dsw-menu-backdrop-filter, blur(16px));
+  /* 官方卡片是实色不透明：不用毛玻璃，specific-menu 令牌取不到时兜底实色 */
+  background: var(--dsw-specific-menu, #1c1c22);
   box-shadow: var(--dsw-elevation-prominent, 0 12px 36px rgba(0, 0, 0, 0.45));
   color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.72));
   font-size: 12px;
@@ -281,74 +281,8 @@ window.__ModuleLoader__.load({
   animation: dsh-power-fade 220ms ease both;
 }
 
-/* 分隔线 + 模型列表：行样式对齐官方 legend（swatch + 名称 + 右侧值，行距 2px） */
-.dsh-power-divider {
-  height: 1px;
-  margin: 12px 0 6px;
-  background: var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.07));
-}
-.dsh-power-models-heading {
-  font-size: 12px;
-  line-height: 20px;
-  color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.5));
-  margin: 0 0 2px;
-}
-.dsh-power-model-list {
-  max-height: 196px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  margin: 0 -6px;
-}
-.dsh-power-group-label {
-  margin: 6px 6px 0;
-  font-size: 12px;
-  line-height: 20px;
-  color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.5));
-}
-.dsh-power-model-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: calc(100% - 12px);
-  padding: 2px 6px;
-  margin: 0 6px;
-  border: none;
-  border-radius: var(--dsw-radius-sm, 8px);
-  background: transparent;
-  color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.72));
-  font-size: 12px;
-  line-height: 20px;
-  text-align: left;
-  cursor: pointer;
-  transition: background 140ms ease, color 140ms ease;
-}
-.dsh-power-model-row:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.07)); }
-.dsh-power-model-row[data-current="true"] { color: var(--dsw-alias-label-primary, rgba(232, 238, 250, 0.92)); }
-.dsh-power-model-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* 官方 swatch：8x8 r2，颜色随 provider 组轮换三色 */
-.dsh-power-swatch {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  background: var(--meter-tint, rgba(255, 255, 255, 0.4));
-}
-.dsh-power-model-check {
-  flex: none;
-  font-size: 11px;
-  color: var(--dsw-alias-label-primary, rgba(232, 238, 250, 0.92));
-  opacity: 0;
-  transform: scale(0.6);
-  transition: opacity 200ms ease, transform 240ms ${EASE};
-}
-.dsh-power-model-row[data-current="true"] .dsh-power-model-check { opacity: 1; transform: scale(1); }
 .dsh-power-state {
-  padding: 12px 4px;
+  padding: 8px 4px 0;
   text-align: center;
   color: rgba(232, 238, 250, 0.5);
   font-size: 12px;
@@ -538,20 +472,12 @@ window.__ModuleLoader__.load({
     /* 面板                                                              */
     /* ---------------------------------------------------------------- */
 
-    /** 官方 ContextMeter 图例三色（provider 组轮换）：neutral-bluish / 紫 / blue */
-    const GROUP_TINTS = [
-      'var(--dsw-static-neutral-bluish-400, #8b93a7)',
-      '#a78bfa',
-      'var(--dsw-static-blue-450, #4d6bfe)',
-    ]
-    const tintOf = (index) => GROUP_TINTS[index % GROUP_TINTS.length]
-
     function PickerPanel({ store, select, load, onClose }) {
       const state = React.useSyncExternalStore(
         (fn) => store.subscribe(fn),
         () => store.getSnapshot(),
       )
-      const { groups, current, model, reasoning, pending } = readState(state)
+      const { current, model, reasoning } = readState(state)
       const efforts = Array.isArray(reasoning?.efforts) ? reasoning.efforts : []
       const storeEffort = current?.reasoningEffort ?? reasoning?.defaultEffort
 
@@ -574,31 +500,6 @@ window.__ModuleLoader__.load({
 
       const failure = state?.error ?? null
 
-      const pickModel = (provider, modelId) => {
-        // 换模型保留当前档位——目标模型不支持就回落到它的默认档。
-        const keep = shownEffort !== undefined
-          && efforts.some((effort) => effort.id === shownEffort)
-        const selection = {
-          provider,
-          model: modelId,
-          ...(keep ? { reasoningEffort: shownEffort } : {}),
-        }
-        // select 返回 RemoteResult：失败时面板留住（store 会进 error 态），
-        // 成功才收起。无条件关面板会让失败看起来像「点了立刻消失」。
-        Promise.resolve(select(selection)).then((result) => {
-          if (result && result.ok === false) {
-            report('select-rejected', {
-              provider: selection.provider,
-              model: selection.model,
-              result: JSON.stringify(result).slice(0, 300),
-            })
-          } else {
-            onClose()
-          }
-        }).catch((err) => {
-          report('select-error', { message: String(err?.message ?? err) })
-        })
-      }
       const pickEffort = (effortId) => {
         if (!current || effortId === shownEffort) return
         setOptimisticEffort(effortId)
@@ -652,36 +553,6 @@ window.__ModuleLoader__.load({
           }),
         ),
         topEffort && h('div', { className: 'dsh-power-hint' }, '使用额度消耗更快'),
-        h('div', { className: 'dsh-power-divider' }),
-        h('div', { className: 'dsh-power-models-heading' }, '选择模型'),
-        (!groups.length && pending === null)
-          ? h('div', { className: 'dsh-power-state' }, '正在加载模型…')
-          : h('div', { className: 'dsh-power-model-list' },
-              groups.map((group, groupIndex) => h('div', { key: group.id },
-                group.name && group.name !== group.id
-                  ? h('div', { className: 'dsh-power-group-label' }, group.name)
-                  : null,
-                (Array.isArray(group.models) ? group.models : []).map((entry) => {
-                  const isCurrent = current
-                    && group.id === current.provider
-                    && entry.id === current.model
-                  return h('button', {
-                    key: `${group.id}:${entry.id}`,
-                    type: 'button',
-                    className: 'dsh-power-model-row',
-                    'data-current': isCurrent ? 'true' : 'false',
-                    onClick: () => !isCurrent && pickModel(group.id, entry.id),
-                  },
-                    h('span', {
-                      className: 'dsh-power-swatch',
-                      style: { '--meter-tint': tintOf(groupIndex) },
-                    }),
-                    h('span', { className: 'dsh-power-model-name' }, entry.name ?? entry.id),
-                    h('span', { className: 'dsh-power-model-check' }, '✓'),
-                  )
-                }),
-              )),
-            ),
       )
     }
 
