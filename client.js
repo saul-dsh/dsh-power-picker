@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.2.0'
+    const VERSION = '0.2.1'
 
     const CSS = `
 .dsh-power-seat {
@@ -536,9 +536,10 @@ window.__ModuleLoader__.load({
       const close = React.useCallback(() => setOpen(false), [])
       useDismiss(panelRef, close)
 
+      // 目录可能为 null（inject 降级）：订阅必须做成空安全，hook 顺序保持不变。
       const state = React.useSyncExternalStore(
-        (fn) => directory.subscribe(fn),
-        () => directory.getSnapshot(),
+        (fn) => (directory && typeof directory.subscribe === 'function' ? directory.subscribe(fn) : () => {}),
+        () => (directory && typeof directory.getSnapshot === 'function' ? directory.getSnapshot() : null),
       )
       const { current, model, reasoning } = readState(state)
       const efforts = Array.isArray(reasoning?.efforts) ? reasoning.efforts : []
@@ -587,7 +588,10 @@ window.__ModuleLoader__.load({
     /* ---------------------------------------------------------------- */
 
     return {
-      inject: ['slots', 'modelDirectories', 'sessions'],
+      // modelDirectories 的服务链要求调用方也声明 sessions/remote/remote.session
+      // （ModelDirectoryResolver static inject；缺了 cordis 会以
+      // "cannot get property remote.session without inject" 拒绝目录解析）。
+      inject: ['slots', 'sessions', 'remote', 'remote.session', 'modelDirectories'],
       apply(ctx) {
         ensureStyle()
         report('boot', {
@@ -595,12 +599,13 @@ window.__ModuleLoader__.load({
             slots: typeof ctx.slots,
             modelDirectories: typeof ctx.modelDirectories,
             sessions: typeof ctx.sessions,
+            remote: typeof ctx.remote,
           },
         })
         console.info(`[dsh-power-picker] client ${VERSION} loading`)
 
         // 可选注入：服务齐了才注册遮蔽；缺服务时内置选择器原样保留。
-        ctx.inject(['slots', 'modelDirectories', 'sessions'], (scope) => {
+        ctx.inject(['slots', 'sessions', 'remote', 'remote.session', 'modelDirectories'], (scope) => {
           const gate = Promise.race([
             fetch(`${ENDPOINT}/enabled`)
               .then((res) => (res.ok ? res.json() : { enabled: true }))
