@@ -2,6 +2,14 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.6.1] - 2026-10-24
+
+### 变更（面板样式对齐官方 ContextMeter 卡片，逐条取自已装 asar 的编译 CSS）
+
+- **面板容器换官方令牌**：`background: var(--dsw-specific-menu)`、`border-radius: var(--dsw-radius-lg)`、`box-shadow: var(--dsw-elevation-prominent)`、`backdrop-filter: var(--dsw-menu-backdrop-filter)`、`border: 0`（官方无描边）、`padding: 12px`、`font-size: 12px / line-height: 20px`、宽 `min(264px, 100vw-24px)`——与官方弹卡逐条一致，全部走 dsw 令牌（带兜底值），主题联动。
+- **模型列表行对齐官方 legend**：行样式 `flex / space-between / gap 12px / padding 2px 0` 基线，模型名 label-secondary（当前项 label-primary），补官方 **8×8 r2 色块**（swatch）按 provider 组轮换官方图例三色（`--dsw-static-neutral-bluish-400` / `#a78bfa` / `--dsw-static-blue-450`），✓ 改 label-primary 并带浮现动画。
+- 小节标题/分组标签对齐官方 `headline` 样式（label-tertiary、12px/20px、去字距）；分隔线与标题间距对齐官方节奏（12/6px）；标题字号 19→17px 融入 20px 字排网格。
+
 ## [0.6.0] - 2026-10-24
 
 ### 变更（按用户确认：入口只保留 Codex 同位的顶部位置）

@@ -47,7 +47,7 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.6.0'
+    const VERSION = '0.6.1'
     const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
     const CSS = `
@@ -81,11 +81,11 @@ window.__ModuleLoader__.load({
 }
 .dsh-power-seat[data-open="true"] .dsh-power-seat-caret { transform: rotate(180deg); }
 
-/* 面板宿主：portal 到 body，280px 宽，结构对齐 Codex 参考图 */
+/* 面板宿主：portal 到 body，宽度对齐官方卡片 min(264px, 100vw-24px) */
 .dsh-power-host {
   position: fixed;
   z-index: 9999;
-  width: 280px;
+  width: min(264px, calc(100vw - 24px));
   transform-origin: bottom left;
   animation: dsh-power-in 200ms ${EASE} both;
 }
@@ -143,13 +143,15 @@ window.__ModuleLoader__.load({
 
 .dsh-power-panel {
   position: relative;
-  padding: 16px 16px 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(28, 28, 34, 0.97);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
-  color: rgba(232, 238, 250, 0.88);
-  font-size: 12.5px;
+  padding: 12px;
+  border: 0;
+  border-radius: var(--dsw-radius-lg, 14px);
+  background: var(--dsw-specific-menu, rgba(28, 28, 34, 0.97));
+  backdrop-filter: var(--dsw-menu-backdrop-filter, blur(16px));
+  box-shadow: var(--dsw-elevation-prominent, 0 12px 36px rgba(0, 0, 0, 0.45));
+  color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.72));
+  font-size: 12px;
+  line-height: 20px;
   overflow: hidden;
 }
 
@@ -158,13 +160,13 @@ window.__ModuleLoader__.load({
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 16px;
+  gap: 6px;
+  margin-bottom: 12px;
 }
 .dsh-power-title {
-  font-size: 19px;
+  font-size: 17px;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 22px;
   background: linear-gradient(92deg, #a8beff 0%, #7c9aff 40%, #4d6bfe 100%);
   -webkit-background-clip: text;
   background-clip: text;
@@ -175,37 +177,37 @@ window.__ModuleLoader__.load({
   white-space: nowrap;
 }
 .dsh-power-subtitle {
-  margin-top: 2px;
+  margin-top: 1px;
   font-size: 11.5px;
-  color: rgba(232, 238, 250, 0.55);
+  color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.5));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .dsh-power-refresh {
   flex: none;
-  width: 26px;
-  height: 26px;
-  margin-top: 2px;
+  width: 24px;
+  height: 24px;
+  margin-top: 1px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-sm, 8px);
   background: transparent;
-  color: rgba(232, 238, 250, 0.5);
+  color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.5));
   font-size: 13px;
   cursor: pointer;
   transition: background 140ms ease, color 140ms ease, transform 320ms ${EASE};
 }
 .dsh-power-refresh:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(232, 238, 250, 0.9);
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
+  color: var(--dsw-alias-label-primary, rgba(232, 238, 250, 0.9));
 }
 .dsh-power-refresh:active { transform: rotate(180deg); }
 
-/* 滑条区：小节标题（对齐 Codex 的「选择推理强度」）+ 10px 轨道 / 22px 旋钮 */
+/* 滑条区：官方 headline 样式的小节标题 + 10px 轨道 / 22px 旋钮 */
 .dsh-power-slider-caption {
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  color: rgba(232, 238, 250, 0.45);
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.5));
   margin-bottom: 6px;
   animation: dsh-power-fade 220ms ease both;
 }
@@ -315,51 +317,67 @@ window.__ModuleLoader__.load({
   animation: dsh-power-fade 220ms ease both;
 }
 
-/* 分隔线 + 模型列表（内联，对齐 Codex 截图：滑条下方直接是模型区） */
+/* 分隔线 + 模型列表：行样式对齐官方 legend（swatch + 名称 + 右侧值，行距 2px） */
 .dsh-power-divider {
   height: 1px;
-  margin: 14px 0 8px;
-  background: rgba(255, 255, 255, 0.07);
+  margin: 12px 0 6px;
+  background: var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.07));
 }
 .dsh-power-models-heading {
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  color: rgba(232, 238, 250, 0.45);
-  margin: 0 0 4px;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.5));
+  margin: 0 0 2px;
 }
 .dsh-power-model-list {
-  max-height: 186px;
+  max-height: 196px;
   overflow-y: auto;
   scrollbar-width: thin;
   margin: 0 -6px;
 }
 .dsh-power-group-label {
-  margin: 7px 6px 3px;
-  font-size: 10.5px;
-  color: rgba(232, 238, 250, 0.4);
+  margin: 6px 6px 0;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.5));
 }
 .dsh-power-model-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 12px;
   width: calc(100% - 12px);
-  padding: 7px 8px;
+  padding: 2px 6px;
   margin: 0 6px;
   border: none;
-  border-radius: 9px;
+  border-radius: var(--dsw-radius-sm, 8px);
   background: transparent;
-  color: rgba(232, 238, 250, 0.82);
-  font-size: 12.5px;
+  color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.72));
+  font-size: 12px;
+  line-height: 20px;
   text-align: left;
   cursor: pointer;
   transition: background 140ms ease, color 140ms ease;
 }
-.dsh-power-model-row:hover { background: rgba(255, 255, 255, 0.07); }
-.dsh-power-model-row[data-current="true"] { color: #9db8ff; }
+.dsh-power-model-row:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.07)); }
+.dsh-power-model-row[data-current="true"] { color: var(--dsw-alias-label-primary, rgba(232, 238, 250, 0.92)); }
+.dsh-power-model-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 官方 swatch：8x8 r2，颜色随 provider 组轮换三色 */
+.dsh-power-swatch {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--meter-tint, rgba(255, 255, 255, 0.4));
+}
 .dsh-power-model-check {
   flex: none;
   font-size: 11px;
+  color: var(--dsw-alias-label-primary, rgba(232, 238, 250, 0.92));
   opacity: 0;
   transform: scale(0.6);
   transition: opacity 200ms ease, transform 240ms ${EASE};
@@ -556,6 +574,14 @@ window.__ModuleLoader__.load({
     /* 面板                                                              */
     /* ---------------------------------------------------------------- */
 
+    /** 官方 ContextMeter 图例三色（provider 组轮换）：neutral-bluish / 紫 / blue */
+    const GROUP_TINTS = [
+      'var(--dsw-static-neutral-bluish-400, #8b93a7)',
+      '#a78bfa',
+      'var(--dsw-static-blue-450, #4d6bfe)',
+    ]
+    const tintOf = (index) => GROUP_TINTS[index % GROUP_TINTS.length]
+
     function PickerPanel({ store, select, load, onClose }) {
       const state = React.useSyncExternalStore(
         (fn) => store.subscribe(fn),
@@ -667,7 +693,7 @@ window.__ModuleLoader__.load({
         (!groups.length && pending === null)
           ? h('div', { className: 'dsh-power-state' }, '正在加载模型…')
           : h('div', { className: 'dsh-power-model-list' },
-              groups.map((group) => h('div', { key: group.id },
+              groups.map((group, groupIndex) => h('div', { key: group.id },
                 group.name && group.name !== group.id
                   ? h('div', { className: 'dsh-power-group-label' }, group.name)
                   : null,
@@ -682,8 +708,11 @@ window.__ModuleLoader__.load({
                     'data-current': isCurrent ? 'true' : 'false',
                     onClick: () => !isCurrent && pickModel(group.id, entry.id),
                   },
-                    h('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
-                      entry.name ?? entry.id),
+                    h('span', {
+                      className: 'dsh-power-swatch',
+                      style: { '--meter-tint': tintOf(groupIndex) },
+                    }),
+                    h('span', { className: 'dsh-power-model-name' }, entry.name ?? entry.id),
                     h('span', { className: 'dsh-power-model-check' }, '✓'),
                   )
                 }),
