@@ -2,6 +2,15 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.2.2] - 2026-10-24
+
+### 修复
+
+- **面板点不开**：面板原来以 `position: fixed` 挂在输入栏 DOM 内部——输入栏祖先链上的 transform/overflow 会把 fixed 元素裁没（内置选择器同样走 portal）。现在面板 `React.createPortal` 到 `document.body`（z-index 9999），定位只依赖座位按钮的视口矩形。
+- 内层 `.dsh-power-panel` 从 fixed 改 relative，避免双重 fixed 定位互相打架。
+- 外点关闭只在面板开启时挂监听（原来挂载时 `ref.current` 为 null 直接没挂上），座位点击在监听注册之前，开面板不会被自吞。
+- 新增 `open` / `close` 诊断阶段：点击无反应时看日志里有没有 `open`，即可区分「点击没生效」和「面板渲染被裁」。
+
 ## [0.2.1] - 2026-10-24
 
 ### 修复

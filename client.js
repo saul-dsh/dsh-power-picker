@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.2.1'
+    const VERSION = '0.2.2'
 
     const CSS = `
 .dsh-power-seat {
@@ -55,8 +55,7 @@ window.__ModuleLoader__.load({
 .dsh-power-seat-caret { flex: none; font-size: 10px; opacity: 0.7; }
 
 .dsh-power-panel {
-  position: fixed;
-  z-index: 60;
+  position: relative;
   width: 312px;
   padding: 14px 14px 12px;
   border-radius: 16px;
@@ -506,11 +505,18 @@ window.__ModuleLoader__.load({
       render() { return this.state.failed ? null : this.props.children }
     }
 
-    function useDismiss(ref, onClose) {
+    /**
+     * 外点关闭：只在面板开启时挂监听（open 进依赖），点击落在座位或
+     * 面板内部不关闭。capture 阶段先于按钮 onClick，开面板的那次点击
+     * 时监听还没挂，不会自吞。
+     */
+    function useDismiss(seatRef, panelRef, open, onClose) {
       React.useEffect(() => {
-        if (!ref.current) return undefined
+        if (!open) return undefined
         const onPointerDown = (event) => {
-          if (!ref.current?.contains(event.target)) onClose()
+          const target = event.target instanceof Element ? event.target : null
+          if (target && (seatRef.current?.contains(target) || panelRef.current?.contains(target))) return
+          onClose()
         }
         const onKeyDown = (event) => {
           if (event.key === 'Escape') onClose()
@@ -521,7 +527,7 @@ window.__ModuleLoader__.load({
           document.removeEventListener('pointerdown', onPointerDown, true)
           document.removeEventListener('keydown', onKeyDown)
         }
-      }, [ref, onClose])
+      }, [seatRef, panelRef, open, onClose])
     }
 
     /**
@@ -534,7 +540,7 @@ window.__ModuleLoader__.load({
       const seatRef = React.useRef(null)
       const panelRef = React.useRef(null)
       const close = React.useCallback(() => setOpen(false), [])
-      useDismiss(panelRef, close)
+      useDismiss(seatRef, panelRef, open, close)
 
       // 目录可能为 null（inject 降级）：订阅必须做成空安全，hook 顺序保持不变。
       const state = React.useSyncExternalStore(
@@ -571,6 +577,7 @@ window.__ModuleLoader__.load({
           'aria-expanded': open ? 'true' : 'false',
           title: '选择模型与推理强度',
           onClick: () => {
+            report(open ? 'close' : 'open', {})
             if (!open) { try { load() } catch { /* ignore */ } }
             setOpen((value) => !value)
           },
@@ -578,8 +585,13 @@ window.__ModuleLoader__.load({
           h('span', { className: 'dsh-power-seat-label' }, caption),
           h('span', { className: 'dsh-power-seat-caret' }, '▾'),
         ),
-        open && h('div', { ref: panelRef },
-          h(PickerPanel, { store: directory, select, load, onClose: close })),
+        // 面板 portal 到 body：输入栏祖先链的 transform/overflow 会把
+        // fixed 定位的面板裁没（内置选择器同样走 portal），挂在原地等于点不开。
+        open && React.createPortal(
+          h('div', { ref: panelRef, style: { position: 'fixed', zIndex: 9999, left: -9999, top: -9999 } },
+            h(PickerPanel, { store: directory, select, load, onClose: close })),
+          document.body,
+        ),
       )
     }
 
