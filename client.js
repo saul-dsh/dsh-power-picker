@@ -47,7 +47,7 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.8.0'
+    const VERSION = '0.8.1'
     const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
     const CSS = `
@@ -253,6 +253,19 @@ window.__ModuleLoader__.load({
 @media (prefers-reduced-motion: reduce) {
   .dsh-power-star { transition: opacity 120ms ease; transform: none; animation: none; }
   .dsh-power-star[data-on="true"] { opacity: 0.8; }
+}
+/* 官方 16ms 启用技巧（_EnableModelPickerPowerSliderThumbInputMotion）：
+   面板打开时旋钮直接就位不飞入，16ms 后位移过渡才生效 */
+.dsh-power-hitzone:not([data-armed="true"]) .dsh-power-knob,
+.dsh-power-hitzone:not([data-armed="true"]) .dsh-power-fill { transition: none; }
+/* 官方 MaxBurst（canvas 粒子爆发）的 DOM 近似：到顶档时星点一次性弹出 */
+@keyframes dsh-power-pop {
+  0% { transform: scale(0.4); opacity: 0.2; }
+  45% { transform: scale(1.7); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.dsh-power-hitzone[data-burst="true"] .dsh-power-star {
+  animation: dsh-power-pop 0.55s cubic-bezier(0.23, 1, 0.32, 1) both;
 }
 /* _Tick_1bucx_40：4px 刻度点，多段过渡 */
 .dsh-power-tick {
@@ -532,6 +545,22 @@ window.__ModuleLoader__.load({
       const trackRef = React.useRef(null)
       const [dragIndex, setDragIndex] = React.useState(null)
 
+      // 官方 16ms 启用：挂载后短暂延迟才开启位移过渡，开面板时旋钮就位不飞入
+      const [armed, setArmed] = React.useState(false)
+      React.useEffect(() => {
+        const timer = setTimeout(() => setArmed(true), 16)
+        return () => clearTimeout(timer)
+      }, [])
+      // 官方 MaxBurst 近似：值到达最高档时星点一次性弹出
+      const [burst, setBurst] = React.useState(false)
+      React.useEffect(() => {
+        if (efforts.length >= 3 && value === efforts[efforts.length - 1]?.id) {
+          setBurst(true)
+          const timer = setTimeout(() => setBurst(false), 650)
+          return () => clearTimeout(timer)
+        }
+      }, [value, efforts])
+
       const count = efforts.length
       const activeIndex = Math.max(0, efforts.findIndex((effort) => effort.id === value))
       const shownIndex = dragIndex ?? activeIndex
@@ -584,12 +613,16 @@ window.__ModuleLoader__.load({
           'aria-valuenow': activeIndex,
           'aria-valuetext': efforts[activeIndex]?.name ?? '',
           'data-live': dragIndex !== null ? 'true' : 'false',
+          'data-armed': armed ? 'true' : 'false',
+          'data-burst': burst ? 'true' : 'false',
           onPointerDown,
           onPointerMove,
           onPointerUp,
           onPointerCancel: onPointerUp,
           onKeyDown,
         },
+          // 官方结构：Track 只含填充（overflow hidden 负责圆角裁剪）；
+          // TickRail 与 Thumb 在 Root 层——28px 旋钮不被 24px 轨道裁剪
           h('div', { className: 'dsh-power-track' },
             h('div', { className: 'dsh-power-fill', style: { width: `${fill}%` } },
               STAR_SPOTS.map((ratio, index) => h('span', {
@@ -602,19 +635,18 @@ window.__ModuleLoader__.load({
                 },
               }, STAR_SVG)),
             ),
-            // 官方 TickRail：中间档位 4px 刻度点（首尾不画）
-            count > 2 && efforts.map((effort, index) => (
-              index !== 0 && index !== count - 1
-                ? h('span', {
-                  key: `tick-${effort.id ?? index}`,
-                  className: 'dsh-power-tick',
-                  style: { left: `${stopPosition(index, count)}%` },
-                })
-                : null
-            )),
-            // 官方 ThumbInput 在 Root 层而非 Track 内：28px 旋钮不被 24px 轨道裁剪
-            h('div', { className: 'dsh-power-knob', style: { left: `${fill}%` } }),
           ),
+          // 官方 TickRail：中间档位 4px 刻度点（首尾不画）
+          count > 2 && efforts.map((effort, index) => (
+            index !== 0 && index !== count - 1
+              ? h('span', {
+                key: `tick-${effort.id ?? index}`,
+                className: 'dsh-power-tick',
+                style: { left: `${stopPosition(index, count)}%` },
+              })
+              : null
+          )),
+          h('div', { className: 'dsh-power-knob', style: { left: `${fill}%` } }),
         ),
         count > 1 && h('div', { className: 'dsh-power-stops' },
           efforts.map((effort, index) => h('button', {

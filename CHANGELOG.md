@@ -2,6 +2,17 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.8.1] - 2026-10-24
+
+### 修复
+
+- **旋钮被裁成扁片**：0.8.0 改了 24px 轨道 + overflow hidden，但 28px 旋钮还留在轨道内部——圆旋钮被裁成横 pill，观感即截图里的「效果太差」。现在按官方结构把旋钮与 TickRail 移到 Root 层，轨道内只留填充。
+
+### 新增（官方动效机制补全）
+
+- **16ms 启用技巧**（官方 `_EnableModelPickerPowerSliderThumbInputMotion`）：面板打开时旋钮直接就位、不从 0% 飞入，16ms 后位移过渡才生效。
+- **MaxBurst DOM 近似**：值到达最高档时星点一次性弹出（scale 0.4→1.7→1 + 亮度闪现，官方为 canvas 粒子爆发）。
+
 ## [0.8.0] - 2026-10-24
 
 ### 变更（滑条按已装 Codex 的真实 CSS 重写，模块 `_1bucx` 逐条提取）
