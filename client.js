@@ -2,23 +2,28 @@
  * dsh-power-picker 的 web 客户端部分。
  *
  * 把 dsh 输入栏的模型选择器改造成 Codex 桌面端的样式（渐变 power 滑条 +
- * 星点 + 白色旋钮 + provider 分组模型列表），数据走官方通路：
+ * 星点 + 白色旋钮 + 内联模型列表），数据走官方通路：
  *
  *  - `conversation.input.model` 是 single 槽位；多注册只渲染 priority 最低
  *    者，本插件以 priority: -1 遮蔽内置选择器（ui-slots "lowest renders"）。
  *  - 注册契约与内置 ui-model-selection 完全一致（0.2.1-rc.3 反推）：组件
- *    拿到的是 `directory.store`（SnapshotStore，subscribe/getSnapshot 在它
- *    身上）+ load/select 两个动词；快照 = { current, groups, pending, ... }，
+ *    拿到的是 `directory.store`（SnapshotStore）+ load/select 两个动词；
  *    档位阶梯在 groups[].models[].reasoning = { defaultEffort?, efforts }。
- *  - 切换走 select({ provider, model, reasoningEffort? }) → directory.select，
- *    返回 RemoteResult：ok 才收面板，失败留在面板上报错（失败不抛异常）。
+ *  - select 返回 RemoteResult：失败不抛异常，必须检查 ok。
  *  - react shim 没有 createPortal，portal 从 require('react-dom') 取。
  *
- * 0.3.0 视觉/交互重做（参考 shadcn/Radix 离散滑条规范 + Codex 参考图）：
- * 卡片收窄、滑条 8px 轨道 18px 旋钮、cubic-bezier 过渡、拖拽时 1:1 跟手、
- * 档位刻度点、模型列表改为钻取 pane（默认面板只留头部+滑条）。
+ * 0.3.1 数值稳定（修「滑杆异常跳动」）：
+ *  - 乐观值钉住——选档立即显示，select 在途/回滚期间显示值不被 store
+ *    中间态翻转；失败才回弹并上报。
+ *  - 档位标签激活态去掉 font-weight 变化（相邻标签宽度重排会造成抖动），
+ *    改用颜色 + 透明度过渡。
+ *  - 星点固定 5 槽位按填充比例淡入淡出，不再随比例增删重挂载。
  *
- * 诊断：boot/register/inject/snapshot/open/close/select-* 各阶段上报到
+ * 布局对齐 Codex 参考图：单面板自上而下 = 头部（渐变标题 + 副标题 + 右上
+ * 刷新）→ power 滑条（10px 轨道 / 22px 旋钮 / 档位标签）→ 分隔线 →
+ * 「选择模型」内联列表（当前项 ✓）。
+ *
+ * 诊断：boot/register/inject/snapshot/open/close/select-* 上报到
  * /api/dsh-power-picker/diag，落盘 ~/.dsh/power-picker-debug.log。
  */
 
@@ -42,7 +47,8 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.3.0'
+    const VERSION = '0.3.1'
+    const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
     const CSS = `
 .dsh-power-seat {
@@ -71,27 +77,27 @@ window.__ModuleLoader__.load({
   flex: none;
   font-size: 10px;
   opacity: 0.7;
-  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 180ms ${EASE};
 }
 .dsh-power-seat[data-open="true"] .dsh-power-seat-caret { transform: rotate(180deg); }
 
-/* 面板宿主：portal 到 body，尺寸收窄到 264px，视觉平衡对齐 Codex 参考图 */
+/* 面板宿主：portal 到 body，272px 宽，结构对齐 Codex 参考图 */
 .dsh-power-host {
   position: fixed;
   z-index: 9999;
-  width: 264px;
+  width: 272px;
   transform-origin: bottom left;
-  animation: dsh-power-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: dsh-power-in 200ms ${EASE} both;
 }
 @keyframes dsh-power-in {
-  from { opacity: 0; transform: translateY(5px) scale(0.97); }
+  from { opacity: 0; transform: translateY(6px) scale(0.96); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 @media (prefers-reduced-motion: reduce) { .dsh-power-host { animation: none; } }
 
 .dsh-power-panel {
   position: relative;
-  padding: 12px 12px 10px;
+  padding: 14px 14px 10px;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(28, 28, 34, 0.97);
@@ -101,17 +107,18 @@ window.__ModuleLoader__.load({
   overflow: hidden;
 }
 
+/* 头部：左侧渐变大标题 + 副标题，右上刷新，底对齐 */
 .dsh-power-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
 }
 .dsh-power-title {
-  font-size: 15px;
-  font-weight: 650;
-  line-height: 1.25;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.2;
   background: linear-gradient(92deg, #c4b5fd 0%, #a78bfa 40%, #818cf8 100%);
   -webkit-background-clip: text;
   background-clip: text;
@@ -123,7 +130,7 @@ window.__ModuleLoader__.load({
 }
 .dsh-power-subtitle {
   margin-top: 2px;
-  font-size: 11px;
+  font-size: 11.5px;
   color: rgba(232, 238, 250, 0.55);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -131,15 +138,16 @@ window.__ModuleLoader__.load({
 }
 .dsh-power-refresh {
   flex: none;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
+  margin-top: 2px;
   border: none;
   border-radius: 8px;
   background: transparent;
   color: rgba(232, 238, 250, 0.5);
   font-size: 13px;
   cursor: pointer;
-  transition: background 140ms ease, color 140ms ease, transform 300ms ease;
+  transition: background 140ms ease, color 140ms ease, transform 320ms ${EASE};
 }
 .dsh-power-refresh:hover {
   background: rgba(255, 255, 255, 0.08);
@@ -147,34 +155,39 @@ window.__ModuleLoader__.load({
 }
 .dsh-power-refresh:active { transform: rotate(180deg); }
 
-/* power 滑条：8px 轨道 + 刻度点 + 18px 旋钮，cubic-bezier 过渡 */
-.dsh-power-slider { padding: 4px 0 0; }
+/* power 滑条：10px 轨道 / 22px 旋钮（Codex 比例），全宽 */
+.dsh-power-slider { animation: dsh-power-fade 220ms ease both; }
+@keyframes dsh-power-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .dsh-power-slider { animation: none; } }
 .dsh-power-hitzone {
   position: relative;
-  margin: 0 -6px;
-  padding: 8px 6px;
   cursor: pointer;
   touch-action: none;
+  padding: 9px 0;
+  margin: 0 -4px;
 }
 .dsh-power-track {
   position: relative;
-  height: 8px;
+  height: 10px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.09);
-  transition: background 160ms ease, box-shadow 160ms ease;
+  transition: background 160ms ease, box-shadow 200ms ease;
 }
 .dsh-power-hitzone:hover .dsh-power-track {
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.13);
   box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.10);
 }
-.dsh-power-hitzone:focus-visible { outline: 2px solid rgba(139, 92, 246, 0.6); outline-offset: 2px; border-radius: 12px; }
+.dsh-power-hitzone:focus-visible { outline: 2px solid rgba(139, 92, 246, 0.6); outline-offset: 3px; border-radius: 12px; }
 .dsh-power-fill {
   position: absolute;
   inset: 0 auto 0 0;
   border-radius: 999px;
   background: linear-gradient(90deg, #7c3aed 0%, #6366f1 55%, #3b82f6 100%);
-  transition: width 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: width 280ms ${EASE};
 }
+/* 拖拽/滚动中：fill 与旋钮的位移不走过渡，1:1 跟手 */
+.dsh-power-hitzone[data-live="true"] .dsh-power-fill { transition: none; }
+.dsh-power-hitzone[data-live="true"] .dsh-power-knob { transition: box-shadow 160ms ease, transform 160ms ${EASE}; }
 .dsh-power-tick {
   position: absolute;
   top: 50%;
@@ -182,142 +195,102 @@ window.__ModuleLoader__.load({
   height: 3px;
   margin: -1.5px 0 0 -1.5px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.4);
   pointer-events: none;
 }
+/* 星点：固定 5 槽位，按填充比例淡入淡出（不重挂载，无闪烁） */
 .dsh-power-star {
   position: absolute;
   top: 50%;
-  width: 4px;
-  height: 4px;
-  margin: -2px 0 0 -2px;
-  color: rgba(255, 255, 255, 0.9);
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  color: rgba(255, 255, 255, 0.95);
   pointer-events: none;
-  animation: dsh-power-twinkle 1.8s ease-in-out infinite;
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity 260ms ease, transform 300ms ${EASE};
 }
-.dsh-power-star:nth-child(odd) { animation-delay: 0.9s; }
+.dsh-power-star[data-on="true"] {
+  opacity: 1;
+  transform: scale(1);
+  animation: dsh-power-twinkle 1.9s ease-in-out infinite;
+}
 @keyframes dsh-power-twinkle {
-  0%, 100% { opacity: 0.25; transform: scale(0.8); }
-  50% { opacity: 1; transform: scale(1.1); }
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
 }
-@media (prefers-reduced-motion: reduce) { .dsh-power-star { animation: none; opacity: 0.7; } }
+@media (prefers-reduced-motion: reduce) {
+  .dsh-power-star { transition: opacity 120ms ease; transform: none; animation: none; }
+  .dsh-power-star[data-on="true"] { opacity: 0.8; }
+}
 .dsh-power-knob {
   position: absolute;
   top: 50%;
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.2);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.2);
   transform: translate(-50%, -50%) scale(1);
   transition:
-    left 260ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 160ms ease;
+    left 280ms ${EASE},
+    transform 200ms ${EASE},
+    box-shadow 200ms ease;
+  will-change: left;
 }
-.dsh-power-hitzone:hover .dsh-power-knob { transform: translate(-50%, -50%) scale(1.1); }
-.dsh-power-hitzone[data-dragging="true"] .dsh-power-knob {
-  transform: translate(-50%, -50%) scale(1.16);
-  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.55), 0 0 0 5px rgba(124, 58, 237, 0.18);
+.dsh-power-hitzone:hover .dsh-power-knob { transform: translate(-50%, -50%) scale(1.06); }
+.dsh-power-hitzone[data-live="true"] .dsh-power-knob {
+  transform: translate(-50%, -50%) scale(1.15);
+  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.5), 0 0 0 6px rgba(124, 58, 237, 0.16);
 }
-.dsh-power-hitzone[data-dragging="true"] .dsh-power-fill,
-.dsh-power-hitzone[data-dragging="true"] .dsh-power-knob { transition-property: box-shadow, transform; }
-.dsh-power-hitzone[data-dragging="true"] .dsh-power-fill { transition: none; }
-.dsh-power-hitzone[data-dragging="true"] .dsh-power-knob { transition: box-shadow 160ms ease, transform 160ms ease; }
 
-.dsh-power-stops { display: flex; margin-top: 6px; }
+/* 档位标签：激活只变色不变字重（字重会挤压相邻标签造成抖动） */
+.dsh-power-stops { display: flex; margin-top: 8px; }
 .dsh-power-stop-label {
   flex: 1;
   border: none;
   background: transparent;
   padding: 2px 0;
   color: rgba(232, 238, 250, 0.42);
-  font-size: 10.5px;
+  font-size: 11px;
   line-height: 1.3;
   cursor: pointer;
   text-align: center;
-  transition: color 160ms ease, transform 120ms ease;
+  transition: color 180ms ease, opacity 180ms ease, transform 120ms ease;
 }
 .dsh-power-stop-label:first-child { text-align: left; padding-left: 2px; }
 .dsh-power-stop-label:last-child { text-align: right; padding-right: 2px; }
-.dsh-power-stop-label[data-active="true"] { color: rgba(232, 238, 250, 0.92); font-weight: 600; }
 .dsh-power-stop-label:hover { color: rgba(232, 238, 250, 0.75); }
-.dsh-power-stop-label:active { transform: scale(0.96); }
+.dsh-power-stop-label:active { transform: scale(0.95); }
+.dsh-power-stop-label[data-active="true"] { color: rgba(240, 244, 255, 0.95); }
 .dsh-power-hint {
-  margin-top: 7px;
+  margin-top: 8px;
   font-size: 11px;
   color: rgba(251, 191, 36, 0.8);
+  animation: dsh-power-fade 220ms ease both;
 }
 
-/* 钻取 pane：默认只有头部+滑条+模型入口行，列表在第二 pane */
-.dsh-power-panes { position: relative; margin-top: 4px; }
-.dsh-power-pane {
-  animation: dsh-power-pane-in 160ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-@keyframes dsh-power-pane-in {
-  from { opacity: 0; transform: translateX(10px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-@media (prefers-reduced-motion: reduce) { .dsh-power-pane { animation: none; } }
-.dsh-power-pane[data-back="true"] { animation-name: dsh-power-pane-back; }
-@keyframes dsh-power-pane-back {
-  from { opacity: 0; transform: translateX(-10px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-.dsh-power-models-entry {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: calc(100% + 12px);
-  margin: 8px -6px -4px;
-  padding: 7px 6px;
-  border: none;
-  border-radius: 9px;
-  background: transparent;
-  color: rgba(232, 238, 250, 0.62);
-  font-size: 12px;
-  text-align: left;
-  cursor: pointer;
-  transition: background 140ms ease, color 140ms ease;
-}
-.dsh-power-models-entry:hover {
+/* 分隔线 + 模型列表（内联，对齐 Codex 截图：滑条下方直接是模型区） */
+.dsh-power-divider {
+  height: 1px;
+  margin: 12px 0 8px;
   background: rgba(255, 255, 255, 0.07);
-  color: rgba(232, 238, 250, 0.9);
-}
-.dsh-power-models-entry .dsh-power-caret { font-size: 10px; opacity: 0.6; }
-.dsh-power-back-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0 -4px 8px;
-  padding: 4px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: rgba(232, 238, 250, 0.6);
-  font-size: 11.5px;
-  cursor: pointer;
-  transition: background 140ms ease, color 140ms ease;
-}
-.dsh-power-back-row:hover {
-  background: rgba(255, 255, 255, 0.07);
-  color: rgba(232, 238, 250, 0.9);
 }
 .dsh-power-models-heading {
-  font-size: 10.5px;
+  font-size: 11px;
   letter-spacing: 0.04em;
   color: rgba(232, 238, 250, 0.45);
-  margin-bottom: 5px;
+  margin: 0 0 4px;
 }
 .dsh-power-model-list {
-  max-height: 190px;
+  max-height: 186px;
   overflow-y: auto;
   scrollbar-width: thin;
-  margin: 0 -4px;
+  margin: 0 -6px;
 }
 .dsh-power-group-label {
-  margin: 7px 4px 3px;
+  margin: 7px 6px 3px;
   font-size: 10.5px;
   color: rgba(232, 238, 250, 0.4);
 }
@@ -328,18 +301,27 @@ window.__ModuleLoader__.load({
   gap: 8px;
   width: 100%;
   padding: 6px 8px;
+  margin: 0 6px;
   border: none;
-  border-radius: 8px;
+  border-radius: 9px;
   background: transparent;
   color: rgba(232, 238, 250, 0.82);
   font-size: 12.5px;
   text-align: left;
   cursor: pointer;
-  transition: background 140ms ease;
+  width: calc(100% - 12px);
+  transition: background 140ms ease, color 140ms ease;
 }
 .dsh-power-model-row:hover { background: rgba(255, 255, 255, 0.07); }
 .dsh-power-model-row[data-current="true"] { color: #c4b5fd; }
-.dsh-power-model-check { flex: none; font-size: 11px; }
+.dsh-power-model-check {
+  flex: none;
+  font-size: 11px;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 200ms ease, transform 240ms ${EASE};
+}
+.dsh-power-model-row[data-current="true"] .dsh-power-model-check { opacity: 1; transform: scale(1); }
 .dsh-power-state {
   padding: 12px 4px;
   text-align: center;
@@ -426,15 +408,17 @@ window.__ModuleLoader__.load({
 
     const STAR_SVG = h('svg', { viewBox: '0 0 10 10', 'aria-hidden': true },
       h('path', { d: 'M5 0 L6.1 3.9 L10 5 L6.1 6.1 L5 10 L3.9 6.1 L0 5 L3.9 3.9 Z', fill: 'currentColor' }))
+    /** 星点固定 5 槽位：按填充比例点亮，槽位恒在、只做淡入淡出。 */
+    const STAR_SPOTS = [0.14, 0.32, 0.5, 0.68, 0.86]
 
     function stopPosition(index, count) {
       return count <= 1 ? 50 : (index / (count - 1)) * 100
     }
 
     /**
-     * 离散档位滑条（shadcn/Radix 规范）：8px 轨道、18px 旋钮、刻度点；
-     * fill/knob 走 cubic-bezier 过渡，拖拽时 data-dragging 关掉位移过渡
-     * 做 1:1 跟手，松手恢复弹性过渡。
+     * 离散档位滑条。显示值由父层钉住（optimistic 优先），本组件只负责
+     * 交互与动画：点击/拖拽按档位吸附，交互期间（拖拽或键盘逐档）走
+     * data-live 1:1 跟手，松手与外部数值变化走 280ms 弹性过渡。
      */
     function PowerSlider({ efforts, value, onPick }) {
       const trackRef = React.useRef(null)
@@ -444,6 +428,7 @@ window.__ModuleLoader__.load({
       const activeIndex = Math.max(0, efforts.findIndex((effort) => effort.id === value))
       const shownIndex = dragIndex ?? activeIndex
       const fill = stopPosition(shownIndex, count)
+      const litStars = Math.max(1, Math.min(5, Math.ceil((fill / 100) * 5)))
 
       const indexFromEvent = (event) => {
         const rect = trackRef.current?.getBoundingClientRect()
@@ -452,7 +437,7 @@ window.__ModuleLoader__.load({
         return Math.round(ratio * (count - 1))
       }
       const onPointerDown = (event) => {
-        if (count <= 1) return
+        if (count <= 1 || event.button !== 0) return
         event.currentTarget.setPointerCapture?.(event.pointerId)
         setDragIndex(indexFromEvent(event))
       }
@@ -460,9 +445,9 @@ window.__ModuleLoader__.load({
         if (dragIndex === null) return
         setDragIndex(indexFromEvent(event))
       }
-      const onPointerUp = (event) => {
+      const onPointerUp = () => {
         if (dragIndex === null) return
-        const index = dragIndex === null ? indexFromEvent(event) : dragIndex
+        const index = dragIndex
         setDragIndex(null)
         const effort = efforts[index]
         if (effort && effort.id !== value) onPick(effort.id)
@@ -479,17 +464,6 @@ window.__ModuleLoader__.load({
         }
       }
 
-      const stars = React.useMemo(() => {
-        const spots = [0.16, 0.36, 0.56, 0.76, 0.93]
-        return spots.slice(0, Math.max(3, Math.min(5, Math.round(fill / 20)))).map((ratio, index) => (
-          h('span', {
-            key: index,
-            className: 'dsh-power-star',
-            style: { left: `${ratio * fill}%`, animationDelay: `${index * 0.35}s` },
-          }, STAR_SVG)
-        ))
-      }, [fill])
-
       return h('div', { className: 'dsh-power-slider' },
         h('div', {
           ref: trackRef,
@@ -501,7 +475,7 @@ window.__ModuleLoader__.load({
           'aria-valuemax': Math.max(0, count - 1),
           'aria-valuenow': activeIndex,
           'aria-valuetext': efforts[activeIndex]?.name ?? '',
-          'data-dragging': dragIndex !== null ? 'true' : 'false',
+          'data-live': dragIndex !== null ? 'true' : 'false',
           onPointerDown,
           onPointerMove,
           onPointerUp,
@@ -509,7 +483,17 @@ window.__ModuleLoader__.load({
           onKeyDown,
         },
           h('div', { className: 'dsh-power-track' },
-            h('div', { className: 'dsh-power-fill', style: { width: `${fill}%` } }, stars),
+            h('div', { className: 'dsh-power-fill', style: { width: `${fill}%` } },
+              STAR_SPOTS.map((ratio, index) => h('span', {
+                key: index,
+                className: 'dsh-power-star',
+                'data-on': index < litStars ? 'true' : 'false',
+                style: {
+                  left: `${ratio * 100}%`,
+                  animationDelay: `${index * 0.32}s`,
+                },
+              }, STAR_SVG)),
+            ),
             count > 2 && efforts.map((effort, index) => (
               index !== 0 && index !== count - 1
                 ? h('span', {
@@ -545,19 +529,35 @@ window.__ModuleLoader__.load({
       )
       const { groups, current, model, reasoning, pending } = readState(state)
       const efforts = Array.isArray(reasoning?.efforts) ? reasoning.efforts : []
-      const effectiveEffort = current?.reasoningEffort ?? reasoning?.defaultEffort
-      const [pane, setPane] = React.useState('root')
+      const storeEffort = current?.reasoningEffort ?? reasoning?.defaultEffort
+
+      // 乐观值钉住：选档立即显示；select 在途/回滚期间 store 会先后发出
+      // pending、旧值、新值等中间快照，显示值不被它们翻转——这是「滑杆
+      // 自行跳动」的根因。store 追上乐观值即解除；失败或超时回弹。
+      const [optimisticEffort, setOptimisticEffort] = React.useState(null)
+      const shownEffort = optimisticEffort !== null && efforts.some((e) => e.id === optimisticEffort)
+        ? optimisticEffort
+        : storeEffort
+      React.useEffect(() => {
+        if (optimisticEffort === null) return undefined
+        if (current?.reasoningEffort === optimisticEffort) {
+          setOptimisticEffort(null)
+          return undefined
+        }
+        const timer = setTimeout(() => setOptimisticEffort(null), 5000)
+        return () => clearTimeout(timer)
+      }, [current?.reasoningEffort, optimisticEffort])
+
       const failure = state?.error ?? null
-      const modelCount = groups.reduce((sum, group) => sum + (Array.isArray(group.models) ? group.models.length : 0), 0)
 
       const pickModel = (provider, modelId) => {
         // 换模型保留当前档位——目标模型不支持就回落到它的默认档。
-        const keep = current?.reasoningEffort !== undefined
-          && efforts.some((effort) => effort.id === current.reasoningEffort)
+        const keep = shownEffort !== undefined
+          && efforts.some((effort) => effort.id === shownEffort)
         const selection = {
           provider,
           model: modelId,
-          ...(keep ? { reasoningEffort: current.reasoningEffort } : {}),
+          ...(keep ? { reasoningEffort: shownEffort } : {}),
         }
         // select 返回 RemoteResult：失败时面板留住（store 会进 error 态），
         // 成功才收起。无条件关面板会让失败看起来像「点了立刻消失」。
@@ -576,22 +576,28 @@ window.__ModuleLoader__.load({
         })
       }
       const pickEffort = (effortId) => {
-        if (!current) return
+        if (!current || effortId === shownEffort) return
+        setOptimisticEffort(effortId)
         Promise.resolve(select({
           provider: current.provider,
           model: current.model,
           reasoningEffort: effortId,
         })).then((result) => {
           if (result && result.ok === false) {
+            setOptimisticEffort(null)
             report('select-rejected', { effort: effortId, result: JSON.stringify(result).slice(0, 300) })
           }
+          // 成功：store 追上后由 effect 解除钉住；异常快照期间显示值不动。
         }).catch((err) => {
+          setOptimisticEffort(null)
           report('select-error', { message: String(err?.message ?? err) })
         })
       }
 
       const title = model?.name ?? current?.model ?? '模型'
-      const effortName = efforts.find((effort) => effort.id === effectiveEffort)?.name
+      const effortName = efforts.find((effort) => effort.id === shownEffort)?.name
+      const shownIndex = efforts.findIndex((effort) => effort.id === shownEffort)
+      const topEffort = efforts.length >= 3 && shownIndex === efforts.length - 1
 
       return h('div', { className: 'dsh-power-panel', role: 'dialog', 'aria-label': '模型与推理强度' },
         h('div', { className: 'dsh-power-header' },
@@ -615,55 +621,37 @@ window.__ModuleLoader__.load({
         ),
         efforts.length > 0 && h(PowerSlider, {
           efforts,
-          value: effectiveEffort,
+          value: shownEffort,
           onPick: pickEffort,
         }),
-        h('div', { className: 'dsh-power-panes' },
-          pane === 'root'
-            ? h('div', { key: 'root', className: 'dsh-power-pane' },
-                h('button', {
-                  type: 'button',
-                  className: 'dsh-power-models-entry',
-                  onClick: () => setPane('models'),
-                },
-                  h('span', null, `切换模型（${modelCount}）`),
-                  h('span', { className: 'dsh-power-caret' }, '›'),
-                ),
-              )
-            : h('div', { key: 'models', className: 'dsh-power-pane', 'data-back': 'true' },
-                h('button', {
-                  type: 'button',
-                  className: 'dsh-power-back-row',
-                  onClick: () => setPane('root'),
-                }, '‹ 返回'),
-                h('div', { className: 'dsh-power-models-heading' }, '选择模型'),
-                (!groups.length && pending === null)
-                  ? h('div', { className: 'dsh-power-state' }, '正在加载模型…')
-                  : h('div', { className: 'dsh-power-model-list' },
-                      groups.map((group) => h('div', { key: group.id },
-                        group.name && group.name !== group.id
-                          ? h('div', { className: 'dsh-power-group-label' }, group.name)
-                          : null,
-                        (Array.isArray(group.models) ? group.models : []).map((entry) => {
-                          const isCurrent = current
-                            && group.id === current.provider
-                            && entry.id === current.model
-                          return h('button', {
-                            key: `${group.id}:${entry.id}`,
-                            type: 'button',
-                            className: 'dsh-power-model-row',
-                            'data-current': isCurrent ? 'true' : 'false',
-                            onClick: () => !isCurrent && pickModel(group.id, entry.id),
-                          },
-                            h('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
-                              entry.name ?? entry.id),
-                            isCurrent && h('span', { className: 'dsh-power-model-check' }, '✓'),
-                          )
-                        }),
-                      )),
-                    ),
-              ),
-        ),
+        topEffort && h('div', { className: 'dsh-power-hint' }, '使用额度消耗更快'),
+        h('div', { className: 'dsh-power-divider' }),
+        h('div', { className: 'dsh-power-models-heading' }, '选择模型'),
+        (!groups.length && pending === null)
+          ? h('div', { className: 'dsh-power-state' }, '正在加载模型…')
+          : h('div', { className: 'dsh-power-model-list' },
+              groups.map((group) => h('div', { key: group.id },
+                group.name && group.name !== group.id
+                  ? h('div', { className: 'dsh-power-group-label' }, group.name)
+                  : null,
+                (Array.isArray(group.models) ? group.models : []).map((entry) => {
+                  const isCurrent = current
+                    && group.id === current.provider
+                    && entry.id === current.model
+                  return h('button', {
+                    key: `${group.id}:${entry.id}`,
+                    type: 'button',
+                    className: 'dsh-power-model-row',
+                    'data-current': isCurrent ? 'true' : 'false',
+                    onClick: () => !isCurrent && pickModel(group.id, entry.id),
+                  },
+                    h('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
+                      entry.name ?? entry.id),
+                    h('span', { className: 'dsh-power-model-check' }, '✓'),
+                  )
+                }),
+              )),
+            ),
       )
     }
 
@@ -739,7 +727,7 @@ window.__ModuleLoader__.load({
         const seat = seatRef.current
         if (!panel || !seat) return
         const rect = seat.getBoundingClientRect()
-        panel.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 276))}px`
+        panel.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 284))}px`
         panel.style.top = `${Math.max(8, rect.top - panel.offsetHeight - 8)}px`
       }, [open])
 
