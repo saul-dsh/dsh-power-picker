@@ -2,6 +2,18 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.9.0] - 2026-10-24
+
+### 变更（特效系统整体照抄 Codex：四个特效 chunk 逐行移植）
+
+从已装 Codex asar 中按文件表偏移提取了 `fast-track-particles` / `max-burst` / `max-fill` / `max-track-particles` 四个懒加载 chunk 与 `effects.module`、`particles` 依赖模块的源码，逐行移植：
+
+- **FastTrackParticles**：14 个 3px 辉光白点沿填充区往返（官方 travel 关键帧 100%→92%→8%→0、时长 1.9s ±20% 抖动、负延迟分布、top 12~88%、seeded sin 哈希随机）。
+- **MaxFill（WebGL）**：MAX 档填充的 12 中心紫色 metaball 辉光，**GLSL 着色器为官方原版逐行移植**（颗粒噪点、通道时间漂移、pow 色调），ResizeObserver + rAF 驱动，reduced-motion 单帧。填充底色改实色 chart-blue（官方无渐变，观感来自此层）。
+- **MaxTrackParticles**：MAX 档轨道上方 5~19% 高度带 14 粒漂浮，按各自 1.6×(0.8~2.0)s 周期跳位（官方 Math.random 跳位 + 分属性过渡）。
+- **MaxBurst**：到达 MAX 档时旋钮位置 76×76 盒内 16 粒按官方 ParticleBurst 关键帧弹出（紫/紫蓝混色轮换、`--particle-x/y` 扩散）。
+- 移除 0.3.x 自创的星点 twinkle 方案（被官方粒子体系替代）。
+
 ## [0.8.1] - 2026-10-24
 
 ### 修复

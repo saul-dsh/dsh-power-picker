@@ -47,7 +47,7 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.8.1'
+    const VERSION = '0.9.0'
     const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
     const CSS = `
@@ -216,57 +216,124 @@ window.__ModuleLoader__.load({
   box-shadow: inset 0 0 0 0.5px var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.12));
   overflow: hidden;
 }
-/* _Range_1bucx_239：填充左圆右直，几何对齐官方 */
+/* _Range_1bucx_239：填充实色 chart-blue（官方无渐变，MAX 辉光由 WebGL 层叠加），左圆右直 */
 .dsh-power-fill {
   position: absolute;
   inset: 0 auto 0 0;
   border-radius: 12px 0 0 12px;
-  background: linear-gradient(90deg, #4d6bfe 0%, #5e84ff 55%, #8fb0ff 100%);
+  background: var(--color-chart-blue, #3a83f7);
   transition: width var(--dsh-power-motion-duration, 0.3s) var(--dsh-power-motion-easing, ease);
 }
 /* 拖拽/滚动中：fill 与旋钮的位移不走过渡，1:1 跟手 */
 .dsh-power-hitzone[data-live="true"] .dsh-power-fill { transition: none; }
 .dsh-power-hitzone[data-live="true"] .dsh-power-knob { transition: box-shadow 160ms ease, transform 160ms ${EASE}; }
-/* 星点：固定 5 槽位，按填充比例淡入淡出（不重挂载，无闪烁）；
-   官方是 canvas 粒子层（FastTrackParticles/MaxBurst），DOM 近似 */
-.dsh-power-star {
+/* _FastTrackParticles_1m50z_1：填充内的移动粒子（官方 DOM 方案，非 canvas） */
+.dsh-power-ftp {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+/* _FastTrackParticlePath_1m50z_7：全宽路径，travel 关键帧 100%→92%→8%→0 */
+.dsh-power-ftp-path {
+  animation-play-state: paused;
+  opacity: 0;
+  will-change: transform;
+  height: 0;
+  animation-name: dsh-power-ftp-travel;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  position: absolute;
+  inset-inline: 0;
+  transform: translate(100%);
+}
+@keyframes dsh-power-ftp-travel {
+  0% { opacity: 0; transform: translate(100%); }
+  8% { opacity: 1; transform: translate(92%); }
+  92% { opacity: 1; transform: translate(8%); }
+  to { opacity: 0; transform: translate(0, 0); }
+}
+/* _TrackParticle_1m50z_22：3px 白点带辉光 */
+.dsh-power-track-particle {
+  background: #ffffffb8;
+  border-radius: 999px;
+  width: 3px;
+  height: 3px;
+  position: absolute;
+  box-shadow: 0 0 5px #ffffff57;
+  top: 0;
+  left: 0;
+  will-change: left, top;
+}
+/* _TrackParticles_1m50z_38：MAX 档轨道上方的漂浮粒子栏 */
+.dsh-power-mtp {
+  inset-inline: 0;
+  pointer-events: none;
+  height: 24px;
   position: absolute;
   top: 50%;
-  width: 6px;
-  height: 6px;
-  margin: -3px 0 0 -3px;
-  color: rgba(255, 255, 255, 0.95);
+  overflow: hidden;
+  transform: translateY(-50%);
+}
+.dsh-power-mtp-particle {
+  background: #ffffffb8;
+  border-radius: 999px;
+  width: 3px;
+  height: 3px;
+  position: absolute;
+  box-shadow: 0 0 5px #ffffff57;
+  will-change: left, top;
+  transition-property: left, top;
+  transition-timing-function: cubic-bezier(0.45, 0, 0.55, 1);
+}
+/* _Burst_1m50z_76：76x76 爆发盒（MAX 到达时 16 粒弹出），锚在旋钮位置 */
+.dsh-power-burst-host {
+  position: absolute;
+  top: 50%;
+  width: 0;
+  height: 0;
+  z-index: 2;
+}
+.dsh-power-burst {
+  z-index: 2;
   pointer-events: none;
-  opacity: 0;
-  transform: scale(0.5);
-  transition: opacity 260ms ease, transform 300ms ${EASE};
+  width: 76px;
+  height: 76px;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
-.dsh-power-star[data-on="true"] {
-  opacity: 1;
-  transform: scale(1);
-  animation: dsh-power-twinkle 1.9s ease-in-out infinite;
+.dsh-power-burst > span {
+  --particle-color: var(--color-chart-purple, #a78bfa);
+  --particle-x: 0px;
+  --particle-y: -36px;
+  background: var(--particle-color);
+  border-radius: 999px;
+  width: 5px;
+  height: 5px;
+  animation: 0.62s cubic-bezier(0.25, 1, 0.5, 1) both dsh-power-burst-pop;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.2);
 }
-@keyframes dsh-power-twinkle {
-  0%, 100% { opacity: 0.55; }
-  50% { opacity: 1; }
+.dsh-power-burst > span:nth-child(4n+3) { --particle-color: color-mix(in srgb, var(--color-chart-purple, #a78bfa) 82%, var(--color-chart-blue, #3a83f7)); }
+.dsh-power-burst > span:nth-child(4n+1):not(:first-child) { --particle-color: color-mix(in srgb, var(--color-chart-purple, #a78bfa) 68%, var(--color-chart-blue, #3a83f7)); }
+.dsh-power-burst > span:first-child { --particle-x: -3px; --particle-y: -34px; }
+@keyframes dsh-power-burst-pop {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.25); }
+  22% { opacity: 1; transform: translate(calc(-50% + var(--particle-x)), calc(-50% + var(--particle-y))) scale(1.28); }
+  to { opacity: 0; transform: translate(calc(-50% + var(--particle-x)), calc(-50% + var(--particle-y))) scale(0.55); }
 }
-@media (prefers-reduced-motion: reduce) {
-  .dsh-power-star { transition: opacity 120ms ease; transform: none; animation: none; }
-  .dsh-power-star[data-on="true"] { opacity: 0.8; }
+/* _Fill/_Mask/_Canvas_1azzv：MAX 档 WebGL 紫色辉光（官方 MaxFill，GLSL 逐行移植） */
+.dsh-power-maxfill {
+  position: absolute;
+  inset: 0;
+  animation: dsh-power-fade 300ms ease both;
 }
-/* 官方 16ms 启用技巧（_EnableModelPickerPowerSliderThumbInputMotion）：
-   面板打开时旋钮直接就位不飞入，16ms 后位移过渡才生效 */
-.dsh-power-hitzone:not([data-armed="true"]) .dsh-power-knob,
-.dsh-power-hitzone:not([data-armed="true"]) .dsh-power-fill { transition: none; }
-/* 官方 MaxBurst（canvas 粒子爆发）的 DOM 近似：到顶档时星点一次性弹出 */
-@keyframes dsh-power-pop {
-  0% { transform: scale(0.4); opacity: 0.2; }
-  45% { transform: scale(1.7); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
-}
-.dsh-power-hitzone[data-burst="true"] .dsh-power-star {
-  animation: dsh-power-pop 0.55s cubic-bezier(0.23, 1, 0.32, 1) both;
-}
+.dsh-power-maxfill canvas { width: 100%; height: 100%; display: block; }
+@media (prefers-reduced-motion: reduce) { .dsh-power-maxfill { animation: none; } }
 /* _Tick_1bucx_40：4px 刻度点，多段过渡 */
 .dsh-power-tick {
   position: absolute;
@@ -527,13 +594,285 @@ window.__ModuleLoader__.load({
     /* power 滑条                                                        */
     /* ---------------------------------------------------------------- */
 
-    const STAR_SVG = h('svg', { viewBox: '0 0 10 10', 'aria-hidden': true },
-      h('path', { d: 'M5 0 L6.1 3.9 L10 5 L6.1 6.1 L5 10 L3.9 6.1 L0 5 L3.9 3.9 Z', fill: 'currentColor' }))
-    /** 星点固定 5 槽位：按填充比例点亮，槽位恒在、只做淡入淡出。 */
-    const STAR_SPOTS = [0.14, 0.32, 0.5, 0.68, 0.86]
+    /* 官方 seeded rand（particles-489ba2692717.js 逐行移植） */
+    const rand = (index, seed) => {
+      const n = Math.sin((index + 1) * 12.9898 + seed * 78.233) * 43758.5453
+      return n - Math.floor(n)
+    }
 
     function stopPosition(index, count) {
       return count <= 1 ? 50 : (index / (count - 1)) * 100
+    }
+
+    /* _FastTrackParticles（fast-track-particles chunk 逐行移植）：
+       14 个粒子沿填充区往返，时长 1.9s 基准 ±20% 抖动，负延迟分布在
+       动画中段，top 12~88%、透明度 0.4~1.0、缩放 0.5~0.95 */
+    const FTP_COUNT = 14
+    const FTP_LOOP = 1.9
+    const FTP_JITTER = 0.2
+    function FastTrackParticles({ percent }) {
+      const phase = 1 - Math.min(Math.max(percent, 0), 100) / 100
+      const step = FTP_LOOP / FTP_COUNT
+      const items = []
+      for (let i = 0; i < FTP_COUNT; i += 1) {
+        const jitter = 1 + (rand(i, 21) - 0.5) * 2 * FTP_JITTER
+        const duration = FTP_LOOP / jitter
+        const delay = i * step - duration * phase
+        const opacity = 0.4 + rand(i, 11) * 0.6
+        const scale = 0.5 + rand(i, 12) * 0.45
+        items.push(h('span', {
+          key: i,
+          className: 'dsh-power-ftp-path',
+          style: {
+            animationDelay: `${delay}s`,
+            animationDuration: `${duration}s`,
+            top: `${12 + rand(i, 23) * 76}%`,
+          },
+        }, h('span', {
+          className: 'dsh-power-track-particle',
+          style: { opacity, transform: `translate(-50%, -50%) scale(${scale})` },
+        })))
+      }
+      return h('span', { className: 'dsh-power-ftp', 'aria-hidden': true }, items)
+    }
+
+    /* _MaxBurst（max-burst chunk 逐行移植）：到达 MAX 档时 16 粒从旋钮
+       位置弹出，颜色按官方 nth-child 规则紫/紫蓝混色轮换 */
+    function Burst() {
+      const items = []
+      for (let i = 0; i < 16; i += 1) {
+        items.push(h('span', {
+          key: i,
+          style: {
+            '--particle-x': i === 0 ? '-3px' : `${(rand(i, 31) - 0.5) * 60}px`,
+            '--particle-y': i === 0 ? '-34px' : `${-(16 + rand(i, 32) * 44)}px`,
+          },
+        }))
+      }
+      return h('span', { className: 'dsh-power-burst', 'aria-hidden': true }, items)
+    }
+
+    /* _MaxTrackParticles（max-track-particles chunk 逐行移植）：MAX 档时
+       14 粒漂浮在轨道上方 5~19% 高度带，按各自时长周期性跳位 */
+    const MTP_COUNT = 14
+    const MTP_BASE = 1.6
+    function hopState() {
+      return {
+        left: Math.round(4 + Math.random() * 92),
+        offsetX: Math.round((Math.random() - 0.5) * 8),
+        top: Math.round(12 + (Math.random() - 0.5) * 14),
+        durationScale: 0.8 + Math.random() * 1.2,
+        opacity: 0.4 + Math.random() * 0.6,
+        scale: 0.5 + Math.random() * 0.45,
+      }
+    }
+    function MaxTrackParticle({ index }) {
+      const [particle, setParticle] = React.useState(hopState)
+      React.useEffect(() => {
+        const id = setInterval(() => setParticle(hopState()), MTP_BASE * particle.durationScale * 1000)
+        return () => clearInterval(id)
+      }, [particle.durationScale])
+      return h('span', {
+        className: 'dsh-power-mtp-particle',
+        style: {
+          left: `calc(${particle.left}% + ${particle.offsetX}px)`,
+          top: `${particle.top}%`,
+          opacity: particle.opacity,
+          transform: `translate(-50%, -50%) scale(${particle.scale})`,
+          transitionDuration: `${MTP_BASE * particle.durationScale}s`,
+        },
+      })
+    }
+    function MaxTrackParticles() {
+      const items = []
+      for (let i = 0; i < MTP_COUNT; i += 1) items.push(h(MaxTrackParticle, { key: i, index: i }))
+      return h('span', { className: 'dsh-power-mtp', 'aria-hidden': true }, items)
+    }
+
+    /* _MaxFill（max-fill chunk 逐行移植）：MAX 档填充的 WebGL 紫色
+       metaball 辉光，GLSL 着色器为官方原版；reduced-motion 只画一帧 */
+    const MAXFILL_VERT = `
+  attribute vec2 aPosition;
+  varying vec2 vUv;
+
+  void main() {
+    vUv = aPosition * 0.5 + 0.5;
+    gl_Position = vec4(aPosition, 0.0, 1.0);
+  }
+`
+    const MAXFILL_FRAG = `
+  precision highp float;
+
+  varying vec2 vUv;
+
+  uniform float uTime;
+  uniform vec2 uResolution;
+
+  const vec3 COLOR_1 = vec3(0.592, 0.388, 0.945);
+  const vec3 COLOR_2 = vec3(0.831, 0.710, 0.953);
+  const vec3 COLOR_3 = vec3(0.286, 0.000, 0.404);
+  const vec3 COLOR_4 = vec3(0.145, 0.055, 0.478);
+  const vec3 COLOR_5 = vec3(0.592, 0.000, 0.996);
+  const vec3 COLOR_6 = vec3(0.780, 0.459, 0.914);
+  const vec3 COLOR_7 = vec3(0.725, 0.576, 1.000);
+  const vec3 COLOR_8 = vec3(0.400, 0.212, 0.820);
+  const vec3 COLOR_9 = vec3(0.882, 0.690, 1.000);
+  const vec3 COLOR_10 = vec3(0.498, 0.345, 0.957);
+  const vec3 COLOR_11 = vec3(0.659, 0.275, 0.910);
+  const vec3 COLOR_12 = vec3(0.212, 0.063, 0.400);
+
+  float grain(vec2 uv) {
+    vec2 grainUv = uv * uResolution * 0.5;
+    return fract(sin(dot(grainUv + uTime, vec2(12.9898, 78.233))) * 43758.5453) * 2.0 - 1.0;
+  }
+
+  float fieldWeight(vec2 point, vec2 center) {
+    return exp(-dot(point - center, point - center) * 12.0);
+  }
+
+  vec3 fieldColor(vec2 rawUv) {
+    const float speed = 1.25;
+    vec2 uv = vec2(rawUv.x, 0.40 + rawUv.y * 0.18);
+    vec2 spatialScale = vec2(1.55, 1.0);
+    vec2 point = uv * spatialScale;
+    vec2 center1 = vec2(0.18 + sin(uTime * speed * 0.42) * 0.18, 0.36 + cos(uTime * speed * 0.50) * 0.42) * spatialScale;
+    vec2 center2 = vec2(0.34 + cos(uTime * speed * 0.62) * 0.24, 0.62 + sin(uTime * speed * 0.47) * 0.38) * spatialScale;
+    vec2 center3 = vec2(0.52 + sin(uTime * speed * 0.38) * 0.28, 0.30 + cos(uTime * speed * 0.58) * 0.36) * spatialScale;
+    vec2 center4 = vec2(0.70 + cos(uTime * speed * 0.54) * 0.24, 0.68 + sin(uTime * speed * 0.41) * 0.36) * spatialScale;
+    vec2 center5 = vec2(0.88 + sin(uTime * speed * 0.74) * 0.16, 0.36 + cos(uTime * speed * 0.64) * 0.40) * spatialScale;
+    vec2 center6 = vec2(0.12 + cos(uTime * speed * 0.48) * 0.20, 0.72 + sin(uTime * speed * 0.70) * 0.30) * spatialScale;
+    vec2 center7 = vec2(0.30 + sin(uTime * speed * 0.58) * 0.22, 0.44 + cos(uTime * speed * 0.52) * 0.42) * spatialScale;
+    vec2 center8 = vec2(0.46 + cos(uTime * speed * 0.68) * 0.26, 0.72 + sin(uTime * speed * 0.56) * 0.32) * spatialScale;
+    vec2 center9 = vec2(0.60 + sin(uTime * speed * 0.44) * 0.28, 0.26 + cos(uTime * speed * 0.60) * 0.38) * spatialScale;
+    vec2 center10 = vec2(0.76 + cos(uTime * speed * 0.50) * 0.22, 0.54 + sin(uTime * speed * 0.66) * 0.40) * spatialScale;
+    vec2 center11 = vec2(0.92 + sin(uTime * speed * 0.70) * 0.15, 0.66 + cos(uTime * speed * 0.46) * 0.30) * spatialScale;
+    vec2 center12 = vec2(0.06 + cos(uTime * speed * 0.40) * 0.14, 0.32 + sin(uTime * speed * 0.60) * 0.40) * spatialScale;
+    float weight1 = fieldWeight(point, center1) * (0.7 + 0.3 * sin(uTime * 0.91));
+    float weight2 = fieldWeight(point, center2) * (0.7 + 0.3 * cos(uTime * 1.07));
+    float weight3 = fieldWeight(point, center3) * (0.7 + 0.3 * sin(uTime * 0.76));
+    float weight4 = fieldWeight(point, center4) * (0.7 + 0.3 * cos(uTime * 1.18));
+    float weight5 = fieldWeight(point, center5) * (0.7 + 0.3 * sin(uTime * 1.03));
+    float weight6 = fieldWeight(point, center6) * (0.7 + 0.3 * cos(uTime * 0.83));
+    float weight7 = fieldWeight(point, center7) * (0.7 + 0.3 * sin(uTime * 1.24));
+    float weight8 = fieldWeight(point, center8) * (0.7 + 0.3 * cos(uTime * 0.96));
+    float weight9 = fieldWeight(point, center9) * (0.7 + 0.3 * sin(uTime * 1.11));
+    float weight10 = fieldWeight(point, center10) * (0.7 + 0.3 * cos(uTime * 0.72));
+    float weight11 = fieldWeight(point, center11) * (0.7 + 0.3 * sin(uTime * 1.29));
+    float weight12 = fieldWeight(point, center12) * (0.7 + 0.3 * cos(uTime * 0.88));
+    float totalWeight = max(
+      weight1 + weight2 + weight3 + weight4 + weight5 + weight6 +
+        weight7 + weight8 + weight9 + weight10 + weight11 + weight12,
+      0.0001
+    );
+    vec3 color = (
+      COLOR_1 * weight1 + COLOR_2 * weight2 + COLOR_3 * weight3 +
+      COLOR_4 * weight4 + COLOR_5 * weight5 + COLOR_6 * weight6 +
+      COLOR_7 * weight7 + COLOR_8 * weight8 + COLOR_9 * weight9 +
+      COLOR_10 * weight10 + COLOR_11 * weight11 + COLOR_12 * weight12
+    ) / totalWeight;
+    color = mix(COLOR_4, color, 0.96);
+
+    return pow(clamp(color, vec3(0.0), vec3(1.0)), vec3(0.9));
+  }
+
+  void main() {
+    vec3 color = fieldColor(vUv);
+    color += grain(vUv) * 0.012;
+    color.r += sin(uTime * 0.5) * 0.02;
+    color.g += cos(uTime * 0.7) * 0.02;
+    color.b += sin(uTime * 0.6) * 0.02;
+    color = pow(color, vec3(0.92));
+
+    gl_FragColor = vec4(color, 1.0);
+  }
+`
+    const MAXFILL_QUAD = new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1])
+
+    function compileShader(gl, type, source) {
+      const shader = gl.createShader(type)
+      if (shader === null) return null
+      gl.shaderSource(shader, source)
+      gl.compileShader(shader)
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        gl.deleteShader(shader)
+        return null
+      }
+      return shader
+    }
+
+    function MaxFill({ active, reducedMotion }) {
+      const canvasRef = React.useRef(null)
+      React.useEffect(() => {
+        if (active !== true) return undefined
+        const canvas = canvasRef.current
+        if (canvas === null) return undefined
+        if (typeof WebGLRenderingContext === 'undefined' || typeof ResizeObserver === 'undefined') return undefined
+        const gl = canvas.getContext('webgl', {
+          alpha: true, antialias: false, depth: false,
+          powerPreference: 'high-performance', stencil: false,
+        })
+        if (gl === null) return undefined
+        const vert = compileShader(gl, gl.VERTEX_SHADER, MAXFILL_VERT)
+        const frag = compileShader(gl, gl.FRAGMENT_SHADER, MAXFILL_FRAG)
+        if (vert === null || frag === null) {
+          if (vert !== null) gl.deleteShader(vert)
+          if (frag !== null) gl.deleteShader(frag)
+          return undefined
+        }
+        const program = gl.createProgram()
+        if (program === null) return undefined
+        gl.attachShader(program, vert)
+        gl.attachShader(program, frag)
+        gl.linkProgram(program)
+        gl.deleteShader(vert)
+        gl.deleteShader(frag)
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+          gl.deleteProgram(program)
+          return undefined
+        }
+        const buffer = gl.createBuffer()
+        if (buffer === null) {
+          gl.deleteProgram(program)
+          return undefined
+        }
+        const aPosition = gl.getAttribLocation(program, 'aPosition')
+        const uResolution = gl.getUniformLocation(program, 'uResolution')
+        const uTime = gl.getUniformLocation(program, 'uTime')
+        const startedAt = performance.now()
+        let frame = 0
+        gl.useProgram(program)
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
+        gl.bufferData(gl.ARRAY_BUFFER, MAXFILL_QUAD, gl.STATIC_DRAW)
+        gl.enableVertexAttribArray(aPosition)
+        gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 0, 0)
+        const draw = (time) => gl.uniform1f(uTime, time)
+        const resize = () => {
+          const ratio = Math.min(window.devicePixelRatio, 2)
+          const { height, width } = canvas.getBoundingClientRect()
+          const wide = Math.max(Math.round(width), 1)
+          const tall = Math.max(Math.round(height), 1)
+          canvas.width = Math.round(wide * ratio)
+          canvas.height = Math.round(tall * ratio)
+          gl.viewport(0, 0, canvas.width, canvas.height)
+          gl.uniform2f(uResolution, wide, tall)
+          draw(reducedMotion ? 0 : (performance.now() - startedAt) / 1000)
+        }
+        const observer = new ResizeObserver(resize)
+        resize()
+        observer.observe(canvas)
+        if (!reducedMotion) frame = window.requestAnimationFrame(function loop(time) {
+          frame = window.requestAnimationFrame(loop)
+          draw((time - startedAt) / 1000)
+        })
+        return () => {
+          if (frame !== 0) window.cancelAnimationFrame(frame)
+          observer.disconnect()
+          gl.deleteBuffer(buffer)
+          gl.deleteProgram(program)
+        }
+      }, [reducedMotion])
+      return h('span', { className: 'dsh-power-maxfill' },
+        h('canvas', { ref: canvasRef, className: 'dsh-power-maxfill-canvas' }))
     }
 
     /**
@@ -565,7 +904,10 @@ window.__ModuleLoader__.load({
       const activeIndex = Math.max(0, efforts.findIndex((effort) => effort.id === value))
       const shownIndex = dragIndex ?? activeIndex
       const fill = stopPosition(shownIndex, count)
-      const litStars = Math.max(1, Math.min(5, Math.ceil((fill / 100) * 5)))
+      const isMax = count >= 3 && value === efforts[count - 1]?.id
+      const reducedMotion = typeof window !== 'undefined'
+        && typeof window.matchMedia === 'function'
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
       const indexFromEvent = (event) => {
         const rect = trackRef.current?.getBoundingClientRect()
@@ -621,19 +963,12 @@ window.__ModuleLoader__.load({
           onPointerCancel: onPointerUp,
           onKeyDown,
         },
-          // 官方结构：Track 只含填充（overflow hidden 负责圆角裁剪）；
-          // TickRail 与 Thumb 在 Root 层——28px 旋钮不被 24px 轨道裁剪
+          // 官方结构：Track 只含填充（overflow hidden 负责圆角裁剪）+ 官方
+          // 粒子层；TickRail、Thumb、Burst 在 Root 层——28px 旋钮不被裁剪
           h('div', { className: 'dsh-power-track' },
             h('div', { className: 'dsh-power-fill', style: { width: `${fill}%` } },
-              STAR_SPOTS.map((ratio, index) => h('span', {
-                key: index,
-                className: 'dsh-power-star',
-                'data-on': index < litStars ? 'true' : 'false',
-                style: {
-                  left: `${ratio * 100}%`,
-                  animationDelay: `${index * 0.32}s`,
-                },
-              }, STAR_SVG)),
+              h(FastTrackParticles, { percent: fill }),
+              isMax && h(MaxFill, { active: true, reducedMotion }),
             ),
           ),
           // 官方 TickRail：中间档位 4px 刻度点（首尾不画）
@@ -646,6 +981,8 @@ window.__ModuleLoader__.load({
               })
               : null
           )),
+          isMax && h(MaxTrackParticles, null),
+          burst && h('span', { className: 'dsh-power-burst-host', style: { left: `${fill}%` } }, h(Burst)),
           h('div', { className: 'dsh-power-knob', style: { left: `${fill}%` } }),
         ),
         count > 1 && h('div', { className: 'dsh-power-stops' },
