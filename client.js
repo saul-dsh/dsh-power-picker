@@ -1,21 +1,20 @@
 /**
  * dsh-power-picker 的 web 客户端部分。
  *
- * 把 dsh 输入栏的模型选择器改造成 Codex 桌面端的样式（反推自
- * OpenAI.Codex 桌面版 26.1021：plan 头 + 渐变 power 滑条 + 星点 + 白色
- * 大旋钮 + 模型列表），但数据全部走 dsh 官方通路：
+ * 把 dsh 输入栏的模型选择器改造成 Codex 桌面端的样式（渐变 power 滑条 +
+ * 星点 + 白色大旋钮 + provider 分组模型列表），数据走官方通路：
  *
- *  - `conversation.input.model` 是 single 槽位；多注册时只渲染 priority
- *    最低者（dsh-reference ui-slots 源码原话 "lowest renders"），所以本
- *    插件以 priority: -1 注册，合法遮蔽内置选择器，不做任何 DOM 破坏。
- *  - 目录数据来自 `ctx.modelDirectories`（内置 ui-model-selection 同款
- *    服务）：directoryFor(sessionId) → subscribe/getSnapshot 渲染，
- *    directory.select({ provider, model, reasoningEffort? }) 官方切换。
- *  - 思考强度阶梯是动态的：catalog.reasoningFor(model) 给出每个模型的
- *    efforts 档位表（如 标准/深度 或 low~max），滑条按档位渲染。
+ *  - `conversation.input.model` 是 single 槽位；多注册只渲染 priority 最低
+ *    者，本插件以 priority: -1 遮蔽内置选择器（ui-slots "lowest renders"）。
+ *  - 注册契约与内置 ui-model-selection 完全一致（0.2.1-rc.3 反推）：组件
+ *    拿到的是 `directory.store`（SnapshotStore，subscribe/getSnapshot 在它
+ *    身上）+ load/select 两个动词；快照 = { current, groups, pending, ... }，
+ *    档位阶梯在 groups[].models[].reasoning = { defaultEffort?, efforts }。
+ *  - 切换走 select({ provider, model, reasoningEffort? }) → directory.select。
  *
- * fail-safe：组件崩溃时渲染为空（ErrorBoundary），服务端 `enabled: false`
- * 可随时关闭遮蔽、恢复内置选择器，无需卸载插件。
+ * 诊断：boot/register/inject-error/crash 各阶段上报到服务端
+ * /api/dsh-power-picker/diag，落盘 ~/.dsh/power-picker-debug.log；同时暴露
+ * window.__dshPowerPicker 供 DevTools 检查。
  */
 
 window.__ModuleLoader__.load({
@@ -25,9 +24,10 @@ window.__ModuleLoader__.load({
     const h = React.createElement
 
     const STYLE_ID = 'dsh-power-picker-style'
-    const ENABLED_ENDPOINT = '/api/dsh-power-picker/enabled'
+    const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
+    const VERSION = '0.2.0'
 
     const CSS = `
 .dsh-power-seat {
@@ -162,10 +162,7 @@ window.__ModuleLoader__.load({
   transition: left 140ms ease;
 }
 .dsh-power-track[data-dragging="true"] .dsh-power-knob { transition: none; }
-.dsh-power-stops {
-  display: flex;
-  margin-top: 7px;
-}
+.dsh-power-stops { display: flex; margin-top: 7px; }
 .dsh-power-stop-label {
   flex: 1;
   border: none;
@@ -228,7 +225,6 @@ window.__ModuleLoader__.load({
 }
 .dsh-power-model-row:hover { background: rgba(255, 255, 255, 0.07); }
 .dsh-power-model-row[data-current="true"] { color: #c4b5fd; }
-.dsh-power-model-row[disabled] { opacity: 0.45; cursor: default; }
 .dsh-power-model-check { flex: none; font-size: 12px; }
 .dsh-power-state {
   padding: 14px 4px;
@@ -258,51 +254,56 @@ window.__ModuleLoader__.load({
     }
 
     /* ---------------------------------------------------------------- */
-    /* 目录状态绑定                                                       */
+    /* 诊断                                                              */
     /* ---------------------------------------------------------------- */
 
-    function useDirectory(directory) {
-      return React.useSyncExternalStore(
-        (fn) => directory.subscribe(fn),
-        () => directory.getSnapshot(),
-      )
+    function report(phase, data) {
+      try {
+        const line = JSON.stringify({ phase, ...data, v: VERSION })
+        console.info(`[dsh-power-picker] ${phase}`, data)
+        fetch(`${ENDPOINT}/diag`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: line,
+          keepalive: true,
+        }).catch(() => { /* ignore */ })
+      } catch { /* ignore */ }
     }
 
-    /**
-     * 快照字段名做防御式读取：模型分组与强度阶梯的确切字段以运行时为准，
-     * 首次快照会把键名打到控制台，联调时一眼可对。
-     */
+    /* ---------------------------------------------------------------- */
+    /* 快照形状（0.2.1-rc.3 实测契约）                                     */
+    /* ---------------------------------------------------------------- */
+
     let snapshotLogged = false
-    function readSnapshotShape(state) {
+    /** 快照：{ current: {provider, model, reasoningEffort?} | null, groups: [{id, name, models: [{id, name, reasoning}]}], pending, retainedEffort? } */
+    function readState(state) {
       if (!snapshotLogged && state && typeof state === 'object') {
         snapshotLogged = true
-        try { console.info('[dsh-power-picker] snapshot keys:', Object.keys(state).join(',')) } catch { /* ignore */ }
+        try {
+          const sample = Array.isArray(state.groups) ? state.groups[0] : null
+          report('snapshot', {
+            keys: Object.keys(state).join(','),
+            groupKeys: sample ? Object.keys(sample).join(',') : null,
+            modelKeys: sample && Array.isArray(sample.models) && sample.models[0]
+              ? Object.keys(sample.models[0]).join(',')
+              : null,
+            groupCount: Array.isArray(state.groups) ? state.groups.length : -1,
+          })
+        } catch { /* ignore */ }
       }
-      const groups = state?.groups ?? state?.providers ?? state?.catalog?.groups ?? []
-      const reasoning = state?.reasoning
-        ?? state?.catalog?.reasoningFor?.(state?.current)
-        ?? null
-      return { groups, reasoning }
-    }
-
-    /** 把分组读成 [{ id, label, models: [{ provider, model, name, effort?] }] } 的安全形状。 */
-    function normalizeGroups(groups) {
-      if (!Array.isArray(groups)) return []
-      return groups
-        .map((group) => ({
-          id: group?.id ?? group?.provider ?? String(group?.label ?? ''),
-          label: group?.label ?? group?.name ?? group?.id ?? '',
-          models: Array.isArray(group?.models)
-            ? group.models
-            : Array.isArray(group?.choices)
-              ? group.choices.map((choice) => choice?.selection ?? choice)
-              : [],
-        }))
-        .filter((group) => group.models.length > 0)
-    }
-
-    function displayNameOf(model) {
-      return model?.name ?? model?.displayName ?? model?.label ?? model?.model ?? ''
+      const groups = Array.isArray(state?.groups) ? state.groups : []
+      const current = state?.current ?? null
+      const model = current
+        ? (groups.find((group) => group?.id === current.provider)?.models ?? [])
+          .find((entry) => entry?.id === current.model)
+        : null
+      return {
+        groups,
+        current,
+        model,
+        reasoning: model?.reasoning ?? null,
+        pending: state?.pending ?? null,
+      }
     }
 
     /* ---------------------------------------------------------------- */
@@ -316,10 +317,7 @@ window.__ModuleLoader__.load({
       return count <= 1 ? 50 : (index / (count - 1)) * 100
     }
 
-    /**
-     * 离散档位滑条：点击轨道/拖拽旋钮按档位吸附，松手才提交 select；
-     * 左右方向键逐档切换。纯本地预览，不刷 RPC。
-     */
+    /** 离散档位滑条：点击/拖拽按档位吸附，松手才提交；左右方向键逐档。 */
     function PowerSlider({ efforts, value, onPick }) {
       const trackRef = React.useRef(null)
       const [dragIndex, setDragIndex] = React.useState(null)
@@ -335,7 +333,6 @@ window.__ModuleLoader__.load({
         const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
         return Math.round(ratio * (count - 1))
       }
-
       const onPointerDown = (event) => {
         if (count <= 1) return
         event.currentTarget.setPointerCapture?.(event.pointerId)
@@ -412,37 +409,37 @@ window.__ModuleLoader__.load({
     /* 面板                                                              */
     /* ---------------------------------------------------------------- */
 
-    function PickerPanel({ directory, state, onClose }) {
-      const { groups: rawGroups, reasoning } = readSnapshotShape(state)
-      const groups = normalizeGroups(rawGroups)
-      const current = state?.current ?? null
-      const currentEffort = current?.reasoningEffort ?? reasoning?.defaultEffort
+    function PickerPanel({ store, select, load, onClose }) {
+      const state = React.useSyncExternalStore(
+        (fn) => store.subscribe(fn),
+        () => store.getSnapshot(),
+      )
+      const { groups, current, model, reasoning, pending } = readState(state)
       const efforts = Array.isArray(reasoning?.efforts) ? reasoning.efforts : []
+      const effectiveEffort = current?.reasoningEffort ?? reasoning?.defaultEffort
 
-      const pickModel = (model) => {
-        // 换模型时保留当前档位——但目标模型不支持就回落到它的默认档。
-        const keep = currentEffort !== undefined
-          && efforts.some((effort) => effort.id === currentEffort)
-        directory.select({
-          provider: model.provider,
-          model: model.model,
-          ...(keep ? { reasoningEffort: currentEffort } : {}),
-        }).catch(() => { /* 错误由 store 状态呈现 */ })
+      const pickModel = (provider, modelId) => {
+        // 换模型保留当前档位——目标模型不支持就回落到它的默认档。
+        const keep = current?.reasoningEffort !== undefined
+          && efforts.some((effort) => effort.id === current.reasoningEffort)
+        void select({
+          provider,
+          model: modelId,
+          ...(keep ? { reasoningEffort: current.reasoningEffort } : {}),
+        })
         onClose()
       }
       const pickEffort = (effortId) => {
         if (!current) return
-        directory.select({
+        void select({
           provider: current.provider,
           model: current.model,
           reasoningEffort: effortId,
-        }).catch(() => { /* 错误由 store 状态呈现 */ })
+        })
       }
-      const reload = () => { directory.load?.() }
 
-      const status = state?.status
-      const title = displayNameOf(current) || '模型'
-      const effortName = efforts.find((effort) => effort.id === currentEffort)?.name
+      const title = model?.name ?? current?.model ?? '模型'
+      const effortName = efforts.find((effort) => effort.id === effectiveEffort)?.name
 
       return h('div', { className: 'dsh-power-panel', role: 'dialog', 'aria-label': '模型与推理强度' },
         h('div', { className: 'dsh-power-header' },
@@ -456,42 +453,36 @@ window.__ModuleLoader__.load({
             className: 'dsh-power-refresh',
             title: '重新加载模型目录',
             'aria-label': '重新加载模型目录',
-            onClick: reload,
+            onClick: () => load(),
           }, '↻'),
         ),
         efforts.length > 0 && h(PowerSlider, {
           efforts,
-          value: currentEffort,
+          value: effectiveEffort,
           onPick: pickEffort,
         }),
-        reasoning?.defaultEffort != null && ['xhigh', 'max'].includes(String(reasoning.defaultEffort))
-          && h('div', { className: 'dsh-power-hint' }, '高推理强度会更快消耗用量'),
         h('div', { className: 'dsh-power-models' },
           h('div', { className: 'dsh-power-models-heading' }, '选择模型'),
-          (status === 'loading' || (!groups.length && !state?.error))
+          (!groups.length && pending === null)
             ? h('div', { className: 'dsh-power-state' }, '正在加载模型…')
-            : state?.error
-              ? h('div', { className: 'dsh-power-state' },
-                '无法加载模型',
-                h('div', null,
-                  h('button', { type: 'button', className: 'dsh-power-retry', onClick: reload }, '重试加载模型')),
-              )
-              : h('div', { className: 'dsh-power-model-list' },
+            : h('div', { className: 'dsh-power-model-list' },
                 groups.map((group) => h('div', { key: group.id },
-                  group.label && h('div', { className: 'dsh-power-group-label' }, group.label),
-                  group.models.map((model, index) => {
+                  group.name && group.name !== group.id
+                    ? h('div', { className: 'dsh-power-group-label' }, group.name)
+                    : null,
+                  (Array.isArray(group.models) ? group.models : []).map((entry) => {
                     const isCurrent = current
-                      && model.provider === current.provider
-                      && model.model === current.model
+                      && group.id === current.provider
+                      && entry.id === current.model
                     return h('button', {
-                      key: `${model.provider}:${model.model}:${index}`,
+                      key: `${group.id}:${entry.id}`,
                       type: 'button',
                       className: 'dsh-power-model-row',
                       'data-current': isCurrent ? 'true' : 'false',
-                      onClick: () => !isCurrent && pickModel(model),
+                      onClick: () => !isCurrent && pickModel(group.id, entry.id),
                     },
                       h('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
-                        displayNameOf(model)),
+                        entry.name ?? entry.id),
                       isCurrent && h('span', { className: 'dsh-power-model-check' }, '✓'),
                     )
                   }),
@@ -505,12 +496,12 @@ window.__ModuleLoader__.load({
     /* 座位组件                                                           */
     /* ---------------------------------------------------------------- */
 
-    /** 崩溃兜底：选择器出错时座位留空，用服务端 enabled 开关恢复内置。 */
+    /** 崩溃兜底：选择器出错时上报并渲染空，服务端 enabled 开关可恢复内置。 */
     class QuietBoundary extends React.Component {
       constructor(props) { super(props); this.state = { failed: false } }
-      static getDerivedStateFromError() { return { failed: true } }
-      componentDidCatch(error) {
-        try { console.error('[dsh-power-picker] crashed:', error) } catch { /* ignore */ }
+      static getDerivedStateFromError(error) {
+        report('crash', { message: String(error?.message ?? error) })
+        return { failed: true }
       }
       render() { return this.state.failed ? null : this.props.children }
     }
@@ -533,15 +524,32 @@ window.__ModuleLoader__.load({
       }, [ref, onClose])
     }
 
-    function PowerPicker({ locked, available, directory }) {
-      const state = useDirectory(directory)
+    /**
+     * 座位组件。props 契约与内置 ModelSelect 一致：
+     * { locked }（owner）+ { available, directory, load, select }（inject 脸，
+     * 其中 directory 是 SnapshotStore）。
+     */
+    function PowerPicker({ locked, available, directory, load, select }) {
       const [open, setOpen] = React.useState(false)
       const seatRef = React.useRef(null)
       const panelRef = React.useRef(null)
       const close = React.useCallback(() => setOpen(false), [])
       useDismiss(panelRef, close)
 
-      // 面板贴着座位按钮上沿：座位在输入栏工具行里，直接用按钮矩形定位。
+      const state = React.useSyncExternalStore(
+        (fn) => directory.subscribe(fn),
+        () => directory.getSnapshot(),
+      )
+      const { current, model, reasoning } = readState(state)
+      const efforts = Array.isArray(reasoning?.efforts) ? reasoning.efforts : []
+      const effectiveEffort = current?.reasoningEffort ?? reasoning?.defaultEffort
+      const effortName = efforts.find((effort) => effort.id === effectiveEffort)?.name
+      const modelName = model?.name ?? current?.model
+      const caption = modelName
+        ? (effortName ? `${modelName} · ${effortName}` : modelName)
+        : '选择推理强度'
+
+      // 面板贴着座位按钮上沿，随输入栏位置走。
       React.useLayoutEffect(() => {
         if (!open) return
         const panel = panelRef.current
@@ -550,20 +558,9 @@ window.__ModuleLoader__.load({
         const rect = seat.getBoundingClientRect()
         panel.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 324))}px`
         panel.style.top = `${Math.max(8, rect.top - panel.offsetHeight - 8)}px`
-      }, [open, state])
+      }, [open])
 
       if (!available || !directory) return null
-
-      const state2 = state ?? {}
-      const { reasoning } = readSnapshotShape(state2)
-      const current = state2.current ?? null
-      const efforts = Array.isArray(reasoning?.efforts) ? reasoning.efforts : []
-      const effortName = efforts.find((effort) => effort.id === (current?.reasoningEffort ?? reasoning?.defaultEffort))?.name
-      const modelName = displayNameOf(current)
-      const caption = modelName
-        ? (effortName ? `${modelName} · ${effortName}` : modelName)
-        : '选择推理强度'
-
       return h('div', { ref: seatRef, style: { display: 'inline-flex', position: 'relative' } },
         h('button', {
           type: 'button',
@@ -573,7 +570,7 @@ window.__ModuleLoader__.load({
           'aria-expanded': open ? 'true' : 'false',
           title: '选择模型与推理强度',
           onClick: () => {
-            if (!open) directory.load?.()
+            if (!open) { try { load() } catch { /* ignore */ } }
             setOpen((value) => !value)
           },
         },
@@ -581,7 +578,7 @@ window.__ModuleLoader__.load({
           h('span', { className: 'dsh-power-seat-caret' }, '▾'),
         ),
         open && h('div', { ref: panelRef },
-          h(PickerPanel, { directory, state, onClose: close })),
+          h(PickerPanel, { store: directory, select, load, onClose: close })),
       )
     }
 
@@ -593,37 +590,63 @@ window.__ModuleLoader__.load({
       inject: ['slots', 'modelDirectories', 'sessions'],
       apply(ctx) {
         ensureStyle()
-        console.info('[dsh-power-picker] client 0.1.0 loading')
-        // 关闭开关在服务端：enabled=false 时不遮蔽，内置选择器原样回来。
-        fetch(ENABLED_ENDPOINT)
-          .then((res) => (res.ok ? res.json() : { enabled: true }))
-          .then(({ enabled }) => {
+        report('boot', {
+          services: {
+            slots: typeof ctx.slots,
+            modelDirectories: typeof ctx.modelDirectories,
+            sessions: typeof ctx.sessions,
+          },
+        })
+        console.info(`[dsh-power-picker] client ${VERSION} loading`)
+
+        // 可选注入：服务齐了才注册遮蔽；缺服务时内置选择器原样保留。
+        ctx.inject(['slots', 'modelDirectories', 'sessions'], (scope) => {
+          const gate = Promise.race([
+            fetch(`${ENDPOINT}/enabled`)
+              .then((res) => (res.ok ? res.json() : { enabled: true }))
+              .catch(() => ({ enabled: true })),
+            new Promise((resolve) => setTimeout(() => resolve({ enabled: true }), 2500)),
+          ])
+
+          gate.then(({ enabled }) => {
             if (enabled === false) {
-              console.info('[dsh-power-picker] disabled by config, built-in picker stays')
+              report('skip-disabled', {})
               return
             }
-            ctx.slots.inject('conversation.input.model', () => ctx.slots.register({
+            scope.slots.inject('conversation.input.model', () => scope.slots.register({
               name: 'conversation.input.model',
               id: 'power-picker',
               priority: SHADOW_PRIORITY,
-              inject: (sessionId) => ({
-                available: ctx.sessions?.subagentAddress?.(sessionId) === undefined,
-                directory: ctx.modelDirectories.directoryFor(sessionId),
-              }),
+              inject: (sessionId) => {
+                try {
+                  const directory = scope.modelDirectories.directoryFor(sessionId)
+                  const available = scope.sessions.subagentAddress(sessionId) === undefined
+                  report('inject', { available, sessionId: String(sessionId) })
+                  return {
+                    available,
+                    // rc.3 契约：组件拿到的是 store（subscribe/getSnapshot 在它身上）。
+                    directory: directory.store,
+                    load: () => {
+                      if (available) directory.load?.()?.catch?.(() => {})
+                    },
+                    select: (selection) => (available
+                      ? directory.select(selection)
+                      : Promise.resolve(undefined)),
+                  }
+                } catch (err) {
+                  report('inject-error', { message: String(err?.message ?? err) })
+                  return {
+                    available: false,
+                    directory: null,
+                    load: () => {},
+                    select: () => Promise.resolve(undefined),
+                  }
+                }
+              },
             }, (props) => h(QuietBoundary, null, h(PowerPicker, props))))
-          })
-          .catch(() => {
-            // 服务端没起（CLI 宿主等）：按启用处理，与插件安装意图一致。
-            ctx.slots.inject('conversation.input.model', () => ctx.slots.register({
-              name: 'conversation.input.model',
-              id: 'power-picker',
-              priority: SHADOW_PRIORITY,
-              inject: (sessionId) => ({
-                available: ctx.sessions?.subagentAddress?.(sessionId) === undefined,
-                directory: ctx.modelDirectories.directoryFor(sessionId),
-              }),
-            }, (props) => h(QuietBoundary, null, h(PowerPicker, props))))
-          })
+            report('register', { priority: SHADOW_PRIORITY })
+          }).catch((err) => report('gate-error', { message: String(err?.message ?? err) }))
+        })
       },
     }
   },

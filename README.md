@@ -38,8 +38,20 @@ dsh plugin --profile desktop add D:\AIiteams\dsh插件\packages\dsh-power-picker
 
 - **遮蔽是全局的**：子代理会话（subagent）本无模型选择，本插件同样不渲染座位。
 - **崩溃兜底**：面板出错时座位留空（ErrorBoundary），此时把 `enabled` 设为 `false` 重启即恢复内置。
-- dsh 升级若改变模型目录 store 的字段名，列表可能为空——首帧会把快照键名打到控制台（`[dsh-power-picker] snapshot keys:`），照着调 `readSnapshotShape` 即可。
+- 数据契约按 **dsh 0.2.1-rc.3** 实测：组件拿到 `directory.store`，档位阶梯在 `groups[].models[].reasoning`。dsh 升级若改了快照字段，面板可能为空——每个阶段都会上报 `~/.dsh/power-picker-debug.log`，`snapshot` 行记录了实测键名，照着调 `readState` 即可。
 - 面板视觉反推自 OpenAI.Codex 桌面版 26.1021；交互契约参考开源 [openai/codex](https://github.com/openai/codex) CLI 的 model/effort 语义。
+
+## 故障排查
+
+座位异常时先看 `~/.dsh/power-picker-debug.log`（每行一条 JSON，带 phase）：
+
+| 现象 | 结论 |
+|------|------|
+| 文件不存在或只有 `server boot` | 插件服务端没起 / 客户端模块没加载，检查插件是否启用、重启 dsh |
+| 有 `boot` 无 `register` | 服务注入不齐（看 boot 行 services 字段）或开关关闭 |
+| 有 `register`、`inject-error` | 目录解析失败，看 message 字段 |
+| 有 `snapshot` 行 | 数据通路正常；`groupKeys`/`modelKeys` 是实测字段名，为空面板说明字段变了 |
+| 有 `crash` 行 | 组件渲染崩溃，message 是错误信息 |
 
 ## License
 
