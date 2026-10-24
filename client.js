@@ -47,7 +47,7 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.6.3'
+    const VERSION = '0.7.0'
     const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
     const CSS = `
@@ -107,8 +107,8 @@ window.__ModuleLoader__.load({
   padding: 12px;
   border: 0;
   border-radius: var(--dsw-radius-lg, 14px);
-  /* 官方卡片是实色不透明：不用毛玻璃，specific-menu 令牌取不到时兜底实色 */
-  background: var(--dsw-specific-menu, #1c1c22);
+  /* 官方卡片是实色：specific-menu 令牌在主题里带透明度，这里硬编码实色 */
+  background: #1c1c22;
   box-shadow: var(--dsw-elevation-prominent, 0 12px 36px rgba(0, 0, 0, 0.45));
   color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.72));
   font-size: 12px;
@@ -167,7 +167,7 @@ window.__ModuleLoader__.load({
 }
 .dsh-power-refresh:active { transform: rotate(180deg); }
 
-/* 滑条区：官方 headline 样式的小节标题 + 10px 轨道 / 22px 旋钮 */
+/* 滑条区：官方 headline 样式的小节标题 + 14px 轨道 / 28px 旋钮（Codex 比例） */
 .dsh-power-slider-caption {
   font-size: 12px;
   line-height: 20px;
@@ -183,12 +183,12 @@ window.__ModuleLoader__.load({
   position: relative;
   cursor: pointer;
   touch-action: none;
-  padding: 9px 0;
+  padding: 10px 0;
   margin: 0 -4px;
 }
 .dsh-power-track {
   position: relative;
-  height: 10px;
+  height: 14px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.09);
   transition: background 160ms ease, box-shadow 200ms ease;
@@ -212,9 +212,9 @@ window.__ModuleLoader__.load({
 .dsh-power-star {
   position: absolute;
   top: 50%;
-  width: 5px;
-  height: 5px;
-  margin: -2.5px 0 0 -2.5px;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
   color: rgba(255, 255, 255, 0.95);
   pointer-events: none;
   opacity: 0;
@@ -237,11 +237,11 @@ window.__ModuleLoader__.load({
 .dsh-power-knob {
   position: absolute;
   top: 50%;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.2);
   transform: translate(-50%, -50%) scale(1);
   transition:
     left 280ms ${EASE},
@@ -279,6 +279,120 @@ window.__ModuleLoader__.load({
   font-size: 11px;
   color: rgba(251, 191, 36, 0.8);
   animation: dsh-power-fade 220ms ease both;
+}
+
+/* 标题可点击（Codex：点模型名选其他模型），展开模型列表 pane */
+.dsh-power-title-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 180px;
+  padding: 1px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+.dsh-power-title-btn:hover { background: rgba(255, 255, 255, 0.06); }
+.dsh-power-title-caret {
+  flex: none;
+  font-size: 9px;
+  color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.5));
+  transition: transform 180ms ${EASE};
+}
+.dsh-power-title-btn[data-open="true"] .dsh-power-title-caret { transform: rotate(180deg); }
+
+/* 模型列表 pane（Codex：标题点击后展开；返回行 + 分组 + 行式条目） */
+.dsh-power-pane { animation: dsh-power-pane-in 160ms ${EASE} both; }
+@keyframes dsh-power-pane-in {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@media (prefers-reduced-motion: reduce) { .dsh-power-pane { animation: none; } }
+.dsh-power-back-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 -4px 8px;
+  padding: 4px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.6));
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+.dsh-power-back-row:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.07));
+  color: var(--dsw-alias-label-primary, rgba(232, 238, 250, 0.9));
+}
+.dsh-power-models-heading {
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.5));
+  margin: 0 0 2px;
+}
+.dsh-power-model-list {
+  max-height: 196px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  margin: 0 -6px;
+}
+.dsh-power-group-label {
+  margin: 6px 6px 0;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.5));
+}
+.dsh-power-model-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: calc(100% - 12px);
+  padding: 2px 6px;
+  margin: 0 6px;
+  border: none;
+  border-radius: var(--dsw-radius-sm, 8px);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.72));
+  font-size: 12px;
+  line-height: 20px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+.dsh-power-model-row:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.07)); }
+.dsh-power-model-row[data-current="true"] { color: var(--dsw-alias-label-primary, rgba(232, 238, 250, 0.92)); }
+.dsh-power-model-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 官方 swatch：8x8 r2，颜色随 provider 组轮换三色 */
+.dsh-power-swatch {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--meter-tint, rgba(255, 255, 255, 0.4));
+}
+.dsh-power-model-check {
+  flex: none;
+  font-size: 11px;
+  color: var(--dsw-alias-label-primary, rgba(232, 238, 250, 0.92));
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 200ms ease, transform 240ms ${EASE};
+}
+.dsh-power-model-row[data-current="true"] .dsh-power-model-check { opacity: 1; transform: scale(1); }
+.dsh-power-state {
+  padding: 8px 4px 0;
+  text-align: center;
+  color: rgba(232, 238, 250, 0.5);
+  font-size: 12px;
 }
 
 .dsh-power-state {
@@ -472,12 +586,20 @@ window.__ModuleLoader__.load({
     /* 面板                                                              */
     /* ---------------------------------------------------------------- */
 
+    /** 官方 ContextMeter 图例三色（provider 组轮换）：neutral-bluish / 紫 / blue */
+    const GROUP_TINTS = [
+      'var(--dsw-static-neutral-bluish-400, #8b93a7)',
+      '#a78bfa',
+      'var(--dsw-static-blue-450, #4d6bfe)',
+    ]
+    const tintOf = (index) => GROUP_TINTS[index % GROUP_TINTS.length]
+
     function PickerPanel({ store, select, load, onClose }) {
       const state = React.useSyncExternalStore(
         (fn) => store.subscribe(fn),
         () => store.getSnapshot(),
       )
-      const { current, model, reasoning } = readState(state)
+      const { groups, current, model, reasoning } = readState(state)
       const efforts = Array.isArray(reasoning?.efforts) ? reasoning.efforts : []
       const storeEffort = current?.reasoningEffort ?? reasoning?.defaultEffort
 
@@ -498,7 +620,36 @@ window.__ModuleLoader__.load({
         return () => clearTimeout(timer)
       }, [current?.reasoningEffort, optimisticEffort])
 
+      // Codex 同款：点卡片上方的模型名展开模型列表选其他模型。
+      const [pane, setPane] = React.useState('root')
+
       const failure = state?.error ?? null
+
+      const pickModel = (provider, modelId) => {
+        // 换模型保留当前档位——目标模型不支持就回落到它的默认档。
+        const keep = shownEffort !== undefined
+          && efforts.some((effort) => effort.id === shownEffort)
+        const selection = {
+          provider,
+          model: modelId,
+          ...(keep ? { reasoningEffort: shownEffort } : {}),
+        }
+        // select 返回 RemoteResult：失败时面板留住（store 会进 error 态），
+        // 成功才收起。无条件关面板会让失败看起来像「点了立刻消失」。
+        Promise.resolve(select(selection)).then((result) => {
+          if (result && result.ok === false) {
+            report('select-rejected', {
+              provider: selection.provider,
+              model: selection.model,
+              result: JSON.stringify(result).slice(0, 300),
+            })
+          } else {
+            onClose()
+          }
+        }).catch((err) => {
+          report('select-error', { message: String(err?.message ?? err) })
+        })
+      }
 
       const pickEffort = (effortId) => {
         if (!current || effortId === shownEffort) return
@@ -527,7 +678,16 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'dsh-power-panel', role: 'dialog', 'aria-label': '模型与推理强度' },
         h('div', { className: 'dsh-power-header' },
           h('div', { style: { minWidth: 0 } },
-            h('div', { className: 'dsh-power-title' }, title),
+            h('button', {
+              type: 'button',
+              className: 'dsh-power-title-btn',
+              'data-open': pane === 'models' ? 'true' : 'false',
+              title: '选择其他模型',
+              onClick: () => setPane((value) => (value === 'models' ? 'root' : 'models')),
+            },
+              h('span', { className: 'dsh-power-title' }, title),
+              h('span', { className: 'dsh-power-title-caret' }, '▾'),
+            ),
             h('div', { className: 'dsh-power-subtitle' },
               effortName ? `${current?.provider ?? ''} · ${effortName}` : (current?.provider ?? '')),
           ),
@@ -544,15 +704,54 @@ window.__ModuleLoader__.load({
           h('div', null,
             h('button', { type: 'button', className: 'dsh-power-retry', onClick: () => load() }, '重试')),
         ),
-        efforts.length > 0 && h('div', { className: 'dsh-power-slider-section' },
-          h('div', { className: 'dsh-power-slider-caption' }, '选择推理强度'),
-          h(PowerSlider, {
-            efforts,
-            value: shownEffort,
-            onPick: pickEffort,
-          }),
-        ),
-        topEffort && h('div', { className: 'dsh-power-hint' }, '使用额度消耗更快'),
+        pane === 'models'
+          ? h('div', { key: 'models', className: 'dsh-power-pane' },
+              h('button', {
+                type: 'button',
+                className: 'dsh-power-back-row',
+                onClick: () => setPane('root'),
+              }, '‹ 返回'),
+              h('div', { className: 'dsh-power-models-heading' }, '选择模型'),
+              (!groups.length)
+                ? h('div', { className: 'dsh-power-state' }, '正在加载模型…')
+                : h('div', { className: 'dsh-power-model-list' },
+                    groups.map((group, groupIndex) => h('div', { key: group.id },
+                      group.name && group.name !== group.id
+                        ? h('div', { className: 'dsh-power-group-label' }, group.name)
+                        : null,
+                      (Array.isArray(group.models) ? group.models : []).map((entry) => {
+                        const isCurrent = current
+                          && group.id === current.provider
+                          && entry.id === current.model
+                        return h('button', {
+                          key: `${group.id}:${entry.id}`,
+                          type: 'button',
+                          className: 'dsh-power-model-row',
+                          'data-current': isCurrent ? 'true' : 'false',
+                          onClick: () => !isCurrent && pickModel(group.id, entry.id),
+                        },
+                          h('span', {
+                            className: 'dsh-power-swatch',
+                            style: { '--meter-tint': tintOf(groupIndex) },
+                          }),
+                          h('span', { className: 'dsh-power-model-name' }, entry.name ?? entry.id),
+                          h('span', { className: 'dsh-power-model-check' }, '✓'),
+                        )
+                      }),
+                    )),
+                  ),
+            )
+          : h('div', { key: 'root', className: 'dsh-power-pane' },
+              efforts.length > 0 && h('div', { className: 'dsh-power-slider-section' },
+                h('div', { className: 'dsh-power-slider-caption' }, '选择推理强度'),
+                h(PowerSlider, {
+                  efforts,
+                  value: shownEffort,
+                  onPick: pickEffort,
+                }),
+              ),
+              topEffort && h('div', { className: 'dsh-power-hint' }, '使用额度消耗更快'),
+            ),
       )
     }
 
