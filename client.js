@@ -47,7 +47,7 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.5.0'
+    const VERSION = '0.5.1'
     const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
     const CSS = `
@@ -736,6 +736,11 @@ window.__ModuleLoader__.load({
       const close = React.useCallback(() => setOpen(false), [])
       useDismiss(seatRef, panelRef, open, close)
 
+      // 入口挂载证据：顶部入口是否真的渲染（含 available 状态）。
+      React.useEffect(() => {
+        report(isTop ? 'top-mounted' : 'seat-mounted', { available: available !== false, hasDirectory: !!directory })
+      }, [])
+
       // 目录可能为 null（inject 降级）：订阅必须做成空安全，hook 顺序保持不变。
       const state = React.useSyncExternalStore(
         (fn) => (directory && typeof directory.subscribe === 'function' ? directory.subscribe(fn) : () => {}),
@@ -838,6 +843,7 @@ window.__ModuleLoader__.load({
               try {
                 const directory = scope.modelDirectories.directoryFor(sessionId)
                 const available = scope.sessions.subagentAddress(sessionId) === undefined
+                report('inject', { available, sessionId: String(sessionId) })
                 return {
                   available,
                   // rc.3 契约：组件拿到的是 store（subscribe/getSnapshot 在它身上）。

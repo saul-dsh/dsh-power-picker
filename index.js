@@ -33,10 +33,11 @@ export const Config = Schema.object({
   /** 关闭后客户端不再注册任何入口，模型选择恢复原样（无需卸载插件）。 */
   enabled: Schema.boolean().default(true).description('是否启用 Codex 风格选择器'),
   /**
-   * 输入栏是否保留一个入口。默认 false（Codex 同款：入口只在会话头顶部，
-   * 输入栏没有模型控件）；true 时顶部 + 输入栏双入口。
+   * 输入栏是否保留入口。默认 true（顶部 + 输入栏双入口，避免任何一处
+   * 布局下找不到入口）；确认顶部入口好用后可设为 false，只留 Codex 同位
+   * 的顶部入口。
    */
-  composerSeat: Schema.boolean().default(false).description('输入栏是否保留模型入口（默认只保留顶部入口）'),
+  composerSeat: Schema.boolean().default(true).description('输入栏是否保留模型入口（默认双入口：顶部 + 输入栏）'),
 })
 
 export function apply(ctx, config) {
