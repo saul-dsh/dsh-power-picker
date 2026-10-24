@@ -47,7 +47,7 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.5.1'
+    const VERSION = '0.6.0'
     const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
     const CSS = `
@@ -101,30 +101,40 @@ window.__ModuleLoader__.load({
 }
 @media (prefers-reduced-motion: reduce) { .dsh-power-host { animation: none; } }
 
-/* 顶部入口（Codex 同位：会话头标题旁的动作区） */
+/* 顶部入口（Codex 同位：会话头标题旁的动作区，模型名为主角） */
 .dsh-power-top {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  max-width: 240px;
-  height: 26px;
-  padding: 0 8px;
+  gap: 6px;
+  max-width: 260px;
+  height: 28px;
+  padding: 0 9px;
   border: none;
   border-radius: 8px;
   background: transparent;
-  color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.72));
-  font-size: 12px;
+  color: var(--dsw-alias-label-primary, rgba(232, 238, 250, 0.88));
+  font-size: 12.5px;
   line-height: 1;
   cursor: pointer;
   transition: background 140ms ease, color 140ms ease;
 }
 .dsh-power-top:hover {
   background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
-  color: var(--dsw-alias-label-primary, rgba(232, 238, 250, 0.9));
 }
 .dsh-power-top[disabled] { opacity: 0.5; cursor: default; }
-.dsh-power-top .dsh-power-seat-label { font-size: 12px; }
+.dsh-power-top-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dsh-power-top-effort {
+  color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.62));
+  font-weight: 400;
+  white-space: nowrap;
+}
 .dsh-power-top .dsh-power-seat-caret {
+  flex: none;
   font-size: 9px;
   opacity: 0.7;
   transition: transform 180ms ${EASE};
@@ -784,7 +794,15 @@ window.__ModuleLoader__.load({
             setOpen((value) => !value)
           },
         },
-          h('span', { className: 'dsh-power-seat-label' }, caption),
+          // Codex 形态：顶部入口以模型名为主角（加粗主色），档位作次级后缀。
+          isTop
+            ? [
+                h('span', { key: 'name', className: 'dsh-power-top-name' }, modelName || '选择模型'),
+                ...(effortName
+                  ? [h('span', { key: 'effort', className: 'dsh-power-top-effort' }, ` · ${effortName}`)]
+                  : []),
+              ]
+            : h('span', { className: 'dsh-power-seat-label' }, caption),
           h('span', { className: 'dsh-power-seat-caret' }, '▾'),
         ),
         // 面板 portal 到 body（react-dom 的 createPortal，内置选择器同款）：

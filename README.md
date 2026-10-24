@@ -33,7 +33,7 @@ dsh plugin --profile desktop add D:\AIiteams\dsh插件\packages\dsh-power-picker
 | 配置 | 默认 | 说明 |
 |------|------|------|
 | `enabled` | `true` | 设为 `false` 恢复内置模型选择器（插件保留但不注册） |
-| `composerSeat` | `false` | 入口位置：默认只在会话头顶部（Codex 同位）；`true` 时顶部 + 输入栏双入口 |
+| `composerSeat` | `false` | 入口位置：默认只在会话头顶部（Codex 同位）；`true` 时加开输入栏座位（双入口） |
 
 ## 已知边界
 
