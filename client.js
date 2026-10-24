@@ -23,11 +23,21 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
+    // dsh 客户端的 react shim 不带 createPortal（0.2.2 实测 crash：
+    // "React.createPortal is not a function"）。加载器的 require 表里有
+    // react-dom——内置 ui-model-selection 自己就 require('react-dom')——
+    // portal 必须从那里取；取不到就退回原地渲染并上报。
+    let createPortal = null
+    try {
+      const ReactDOM = require('react-dom')
+      if (typeof ReactDOM?.createPortal === 'function') createPortal = ReactDOM.createPortal
+    } catch { createPortal = null }
+
     const STYLE_ID = 'dsh-power-picker-style'
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.2.2'
+    const VERSION = '0.2.3'
 
     const CSS = `
 .dsh-power-seat {
@@ -421,24 +431,46 @@ window.__ModuleLoader__.load({
         // 换模型保留当前档位——目标模型不支持就回落到它的默认档。
         const keep = current?.reasoningEffort !== undefined
           && efforts.some((effort) => effort.id === current.reasoningEffort)
-        void select({
+        const selection = {
           provider,
           model: modelId,
           ...(keep ? { reasoningEffort: current.reasoningEffort } : {}),
+        }
+        // select 返回 RemoteResult：失败时面板留住（store 会进 error 态），
+        // 成功才收起。0.2.2 之前是无条件关面板，选择静默失败看起来就是
+        // 「点了立刻消失、什么都没选上」。
+        Promise.resolve(select(selection)).then((result) => {
+          if (result && result.ok === false) {
+            report('select-rejected', {
+              provider: selection.provider,
+              model: selection.model,
+              result: JSON.stringify(result).slice(0, 300),
+            })
+          } else {
+            onClose()
+          }
+        }).catch((err) => {
+          report('select-error', { message: String(err?.message ?? err) })
         })
-        onClose()
       }
       const pickEffort = (effortId) => {
         if (!current) return
-        void select({
+        Promise.resolve(select({
           provider: current.provider,
           model: current.model,
           reasoningEffort: effortId,
+        })).then((result) => {
+          if (result && result.ok === false) {
+            report('select-rejected', { effort: effortId, result: JSON.stringify(result).slice(0, 300) })
+          }
+        }).catch((err) => {
+          report('select-error', { message: String(err?.message ?? err) })
         })
       }
 
       const title = model?.name ?? current?.model ?? '模型'
       const effortName = efforts.find((effort) => effort.id === effectiveEffort)?.name
+      const failure = state?.error ?? null
 
       return h('div', { className: 'dsh-power-panel', role: 'dialog', 'aria-label': '模型与推理强度' },
         h('div', { className: 'dsh-power-header' },
@@ -454,6 +486,11 @@ window.__ModuleLoader__.load({
             'aria-label': '重新加载模型目录',
             onClick: () => load(),
           }, '↻'),
+        ),
+        failure && h('div', { className: 'dsh-power-state' },
+          String(failure?.message ?? failure ?? '选择失败'),
+          h('div', null,
+            h('button', { type: 'button', className: 'dsh-power-retry', onClick: () => load() }, '重试')),
         ),
         efforts.length > 0 && h(PowerSlider, {
           efforts,
@@ -585,13 +622,14 @@ window.__ModuleLoader__.load({
           h('span', { className: 'dsh-power-seat-label' }, caption),
           h('span', { className: 'dsh-power-seat-caret' }, '▾'),
         ),
-        // 面板 portal 到 body：输入栏祖先链的 transform/overflow 会把
-        // fixed 定位的面板裁没（内置选择器同样走 portal），挂在原地等于点不开。
-        open && React.createPortal(
-          h('div', { ref: panelRef, style: { position: 'fixed', zIndex: 9999, left: -9999, top: -9999 } },
-            h(PickerPanel, { store: directory, select, load, onClose: close })),
-          document.body,
-        ),
+        // 面板 portal 到 body（react-dom 的 createPortal，内置选择器同款）：
+        // 输入栏祖先链的 transform/overflow 会把 fixed 面板裁没。加载器给不了
+        // react-dom 时退回原地渲染并上报。崩溃兜底只包面板——座位按钮永远活着。
+        open && (() => {
+          const panel = h('div', { ref: panelRef, style: { position: 'fixed', zIndex: 9999, left: -9999, top: -9999 } },
+            h(QuietBoundary, null, h(PickerPanel, { store: directory, select, load, onClose: close })))
+          return createPortal ? createPortal(panel, document.body) : panel
+        })(),
       )
     }
 
@@ -613,6 +651,7 @@ window.__ModuleLoader__.load({
             sessions: typeof ctx.sessions,
             remote: typeof ctx.remote,
           },
+          portal: createPortal ? 'react-dom' : 'inline-fallback',
         })
         console.info(`[dsh-power-picker] client ${VERSION} loading`)
 

@@ -2,6 +2,14 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.2.3] - 2026-10-24
+
+### 修复
+
+- **点击座位后座位整个消失**：0.2.2 用了 `React.createPortal`，但 dsh 客户端的 react shim 不带这个函数（诊断日志实证 `React.createPortal is not a function`）——点击即渲染崩溃，ErrorBoundary 把整个座位兜成空。现在 portal 改从 `react-dom` 取（加载器 require 表里有它，内置 ui-model-selection 自己就这么用）；取不到时退回原地渲染并上报 portal 模式。
+- **点选条目「立即消失、选不上」**：原来点模型行后无条件关面板，`select()` 的 RemoteResult 失败被完全吞掉——看起来就是面板闪没、选择没生效。现在成功才收面板；失败面板留住、显示 store 的 error 态并带「重试」，同时上报 `select-rejected`/`select-error` 诊断。
+- 崩溃兜底收缩到只包面板内容：面板渲染崩溃时座位按钮仍可点击，不再连带消失。
+
 ## [0.2.2] - 2026-10-24
 
 ### 修复
