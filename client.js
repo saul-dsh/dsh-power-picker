@@ -47,7 +47,7 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.6.1'
+    const VERSION = '0.6.2'
     const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
     const CSS = `
@@ -81,12 +81,13 @@ window.__ModuleLoader__.load({
 }
 .dsh-power-seat[data-open="true"] .dsh-power-seat-caret { transform: rotate(180deg); }
 
-/* 面板宿主：portal 到 body，宽度对齐官方卡片 min(264px, 100vw-24px) */
+/* 面板宿主：portal 到 body，宽度对齐官方卡片 min(264px, 100vw-24px)；
+   从输入栏右下角入口上方弹出，右对齐（Codex 实测形态） */
 .dsh-power-host {
   position: fixed;
   z-index: 9999;
   width: min(264px, calc(100vw - 24px));
-  transform-origin: bottom left;
+  transform-origin: bottom right;
   animation: dsh-power-in 200ms ${EASE} both;
 }
 /* 顶部入口的面板向下展开 */
@@ -100,46 +101,6 @@ window.__ModuleLoader__.load({
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 @media (prefers-reduced-motion: reduce) { .dsh-power-host { animation: none; } }
-
-/* 顶部入口（Codex 同位：会话头标题旁的动作区，模型名为主角） */
-.dsh-power-top {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 260px;
-  height: 28px;
-  padding: 0 9px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--dsw-alias-label-primary, rgba(232, 238, 250, 0.88));
-  font-size: 12.5px;
-  line-height: 1;
-  cursor: pointer;
-  transition: background 140ms ease, color 140ms ease;
-}
-.dsh-power-top:hover {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
-}
-.dsh-power-top[disabled] { opacity: 0.5; cursor: default; }
-.dsh-power-top-name {
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.dsh-power-top-effort {
-  color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.62));
-  font-weight: 400;
-  white-space: nowrap;
-}
-.dsh-power-top .dsh-power-seat-caret {
-  flex: none;
-  font-size: 9px;
-  opacity: 0.7;
-  transition: transform 180ms ${EASE};
-}
-.dsh-power-top[data-open="true"] .dsh-power-seat-caret { transform: rotate(180deg); }
 
 .dsh-power-panel {
   position: relative;
@@ -155,15 +116,16 @@ window.__ModuleLoader__.load({
   overflow: hidden;
 }
 
-/* 头部：左侧渐变大标题 + 副标题，右上刷新，底对齐 */
+/* 头部：Codex 实测为居中排版——渐变标题 + 居中副标题，刷新悬浮右上角 */
 .dsh-power-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 6px;
+  position: relative;
+  text-align: center;
   margin-bottom: 12px;
 }
 .dsh-power-title {
+  display: block;
+  max-width: 200px;
+  margin: 0 auto;
   font-size: 17px;
   font-weight: 700;
   line-height: 22px;
@@ -177,6 +139,7 @@ window.__ModuleLoader__.load({
   white-space: nowrap;
 }
 .dsh-power-subtitle {
+  display: block;
   margin-top: 1px;
   font-size: 11.5px;
   color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.5));
@@ -185,10 +148,11 @@ window.__ModuleLoader__.load({
   white-space: nowrap;
 }
 .dsh-power-refresh {
-  flex: none;
+  position: absolute;
+  top: -2px;
+  right: -2px;
   width: 24px;
   height: 24px;
-  margin-top: 1px;
   border: none;
   border-radius: var(--dsw-radius-sm, 8px);
   background: transparent;
@@ -761,23 +725,21 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * 入口组件，两种形态共用一套面板：
-     *  - variant='top'：会话头动作区（Codex 同位），面板向下展开；
-     *  - variant='seat'：输入栏模型座位（props 契约同内置 ModelSelect，
-     *    含 owner 的 locked），面板向上展开。
-     * inject 脸均为 { available, directory, load, select }。
+     * 座位组件（唯一入口，Codex 同位：输入栏右下角模型控件，面板从其
+     * 上方弹出、右对齐）。props 契约与内置 ModelSelect 一致：
+     * { locked }（owner）+ { available, directory, load, select }（inject 脸，
+     * 其中 directory 是 SnapshotStore）。
      */
-    function PowerPicker({ variant = 'seat', locked, available, directory, load, select }) {
-      const isTop = variant === 'top'
+    function PowerPicker({ locked, available, directory, load, select }) {
       const [open, setOpen] = React.useState(false)
       const seatRef = React.useRef(null)
       const panelRef = React.useRef(null)
       const close = React.useCallback(() => setOpen(false), [])
       useDismiss(seatRef, panelRef, open, close)
 
-      // 入口挂载证据：顶部入口是否真的渲染（含 available 状态）。
+      // 入口挂载证据。
       React.useEffect(() => {
-        report(isTop ? 'top-mounted' : 'seat-mounted', { available: available !== false, hasDirectory: !!directory })
+        report('seat-mounted', { available: available !== false, hasDirectory: !!directory })
       }, [])
 
       // 目录可能为 null（inject 降级）：订阅必须做成空安全，hook 顺序保持不变。
@@ -794,53 +756,45 @@ window.__ModuleLoader__.load({
         ? (effortName ? `${modelName} · ${effortName}` : modelName)
         : '选择推理强度'
 
-      // 面板贴着入口按钮：顶部入口向下展开，输入栏座位向上展开。
+      // 面板从入口上方弹出，右缘对齐按钮右缘（Codex 实测：面板悬在
+      // 「选择推理强度」按钮上方，向左延展）。
       React.useLayoutEffect(() => {
         if (!open) return
         const panel = panelRef.current
         const seat = seatRef.current
         if (!panel || !seat) return
         const rect = seat.getBoundingClientRect()
-        panel.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 292))}px`
-        panel.style.top = isTop
-          ? `${Math.min(window.innerHeight - 16, rect.bottom + 8)}px`
-          : `${Math.max(8, rect.top - panel.offsetHeight - 8)}px`
-      }, [open, isTop])
+        const width = panel.offsetWidth || 264
+        panel.style.left = `${Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))}px`
+        panel.style.top = `${Math.max(8, rect.top - panel.offsetHeight - 8)}px`
+      }, [open])
 
       if (!available || !directory) return null
       return h('div', { ref: seatRef, style: { display: 'inline-flex', position: 'relative' } },
         h('button', {
           type: 'button',
-          className: isTop ? 'dsh-power-top' : 'dsh-power-seat',
+          className: 'dsh-power-seat',
           'data-open': open ? 'true' : 'false',
           disabled: !!locked,
           'aria-haspopup': 'dialog',
           'aria-expanded': open ? 'true' : 'false',
           title: '选择模型与推理强度',
           onClick: () => {
-            report(open ? 'close' : 'open', { variant })
+            report(open ? 'close' : 'open', {})
             if (!open) { try { load() } catch { /* ignore */ } }
             setOpen((value) => !value)
           },
         },
-          // Codex 形态：顶部入口以模型名为主角（加粗主色），档位作次级后缀。
-          isTop
-            ? [
-                h('span', { key: 'name', className: 'dsh-power-top-name' }, modelName || '选择模型'),
-                ...(effortName
-                  ? [h('span', { key: 'effort', className: 'dsh-power-top-effort' }, ` · ${effortName}`)]
-                  : []),
-              ]
-            : h('span', { className: 'dsh-power-seat-label' }, caption),
+          h('span', { className: 'dsh-power-seat-label' }, caption),
           h('span', { className: 'dsh-power-seat-caret' }, '▾'),
         ),
         // 面板 portal 到 body（react-dom 的 createPortal，内置选择器同款）：
-        // 头部/输入栏祖先链的 transform/overflow 会把 fixed 面板裁没。加载器
+        // 输入栏祖先链的 transform/overflow 会把 fixed 面板裁没。加载器
         // 给不了 react-dom 时退回原地渲染并上报。崩溃兜底只包面板——按钮永远活着。
         open && (() => {
           const panel = h('div', {
             ref: panelRef,
-            className: `dsh-power-host${isTop ? ' dsh-power-host--down' : ''}`,
+            className: 'dsh-power-host',
             style: { left: -9999, top: -9999 },
           },
             h(QuietBoundary, null, h(PickerPanel, { store: directory, select, load, onClose: close })))
@@ -913,16 +867,8 @@ window.__ModuleLoader__.load({
               }
             }
 
-            // 顶部入口（Codex 同位）：会话头标题旁的动作区，order 负值靠标题。
-            scope.slots.inject('conversation.session.header.actions', () => scope.slots.register({
-              name: 'conversation.session.header.actions',
-              id: 'power-picker',
-              order: -20,
-              inject: faceFor,
-            }, (props) => h(QuietBoundary, null, h(PowerPicker, { ...props, variant: 'top' }))))
-
-            // 输入栏座位：默认遮蔽成空（Codex 的输入栏没有模型控件）；
-            // composerSeat=true 时保留座位形态双入口。
+            // Codex 实测形态：唯一入口 = 输入栏右下角的模型座位（发送键旁），
+            // 面板从其上方弹出、右对齐。composerSeat=false 时不渲染入口。
             scope.slots.inject('conversation.input.model', () => scope.slots.register({
               name: 'conversation.input.model',
               id: 'power-picker',

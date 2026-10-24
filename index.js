@@ -33,10 +33,10 @@ export const Config = Schema.object({
   /** 关闭后客户端不再注册任何入口，模型选择恢复原样（无需卸载插件）。 */
   enabled: Schema.boolean().default(true).description('是否启用 Codex 风格选择器'),
   /**
-   * Codex 同构：入口只在会话头顶部（显示模型名处），输入栏无模型控件。
-   * 设为 true 可加开输入栏座位（双入口）。
+   * Codex 实测形态：入口就是输入栏右下角「选择推理强度」按钮，面板从其
+   * 上方弹出。默认 true；false 时输入栏不渲染入口（无任何入口）。
    */
-  composerSeat: Schema.boolean().default(false).description('输入栏是否加开模型入口（默认仅顶部，Codex 同位）'),
+  composerSeat: Schema.boolean().default(true).description('输入栏保留模型入口（Codex 同位：右下角，发送键旁）'),
 })
 
 export function apply(ctx, config) {

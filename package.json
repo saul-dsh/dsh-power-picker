@@ -1,6 +1,6 @@
 {
   "name": "dsh-power-picker",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Codex-style model & reasoning-effort picker for the DeepSeek Harness (dsh) composer: shadows the built-in model seat with a gradient power slider and provider-grouped model list, wired to the official session model directory.",
   "type": "module",
   "main": "index.js",
