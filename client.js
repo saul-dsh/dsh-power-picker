@@ -47,7 +47,7 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.9.0'
+    const VERSION = '0.9.1'
     const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
     const CSS = `
@@ -86,15 +86,9 @@ window.__ModuleLoader__.load({
 .dsh-power-host {
   position: fixed;
   z-index: 9999;
-  width: min(264px, calc(100vw - 24px));
+  width: min(300px, calc(100vw - 24px));
   transform-origin: bottom right;
   animation: dsh-power-in 200ms ${EASE} both;
-}
-/* 顶部入口的面板向下展开 */
-.dsh-power-host--down { transform-origin: top left; animation-name: dsh-power-in-down; }
-@keyframes dsh-power-in-down {
-  from { opacity: 0; transform: translateY(-6px) scale(0.96); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 @keyframes dsh-power-in {
   from { opacity: 0; transform: translateY(6px) scale(0.96); }
@@ -104,7 +98,7 @@ window.__ModuleLoader__.load({
 
 .dsh-power-panel {
   position: relative;
-  padding: 12px;
+  padding: 16px;
   border: 0;
   border-radius: var(--dsw-radius-lg, 14px);
   /* 官方卡片是实色：specific-menu 令牌在主题里带透明度，这里硬编码实色 */
@@ -124,11 +118,11 @@ window.__ModuleLoader__.load({
 }
 .dsh-power-title {
   display: block;
-  max-width: 200px;
+  max-width: 220px;
   margin: 0 auto;
-  font-size: 17px;
+  font-size: 20px;
   font-weight: 700;
-  line-height: 22px;
+  line-height: 26px;
   background: linear-gradient(92deg, #a8beff 0%, #7c9aff 40%, #4d6bfe 100%);
   -webkit-background-clip: text;
   background-clip: text;
@@ -140,8 +134,8 @@ window.__ModuleLoader__.load({
 }
 .dsh-power-subtitle {
   display: block;
-  margin-top: 1px;
-  font-size: 11.5px;
+  margin-top: 2px;
+  font-size: 13px;
   color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.5));
   overflow: hidden;
   text-overflow: ellipsis;
@@ -234,9 +228,9 @@ window.__ModuleLoader__.load({
   inset: 0;
   overflow: hidden;
 }
-/* _FastTrackParticlePath_1m50z_7：全宽路径，travel 关键帧 100%→92%→8%→0 */
+/* _FastTrackParticlePath_1m50z_7：全宽路径，travel 关键帧 100%→92%→8%→0；
+   官方默认 running（仅 data-animation-active=false 时暂停） */
 .dsh-power-ftp-path {
-  animation-play-state: paused;
   opacity: 0;
   will-change: transform;
   height: 0;
@@ -1249,7 +1243,7 @@ window.__ModuleLoader__.load({
         const seat = seatRef.current
         if (!panel || !seat) return
         const rect = seat.getBoundingClientRect()
-        const width = panel.offsetWidth || 264
+        const width = panel.offsetWidth || 300
         panel.style.left = `${Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))}px`
         panel.style.top = `${Math.max(8, rect.top - panel.offsetHeight - 8)}px`
       }, [open])

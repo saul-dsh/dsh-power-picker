@@ -2,6 +2,13 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.9.1] - 2026-10-24
+
+### 修复
+
+- **粒子不动**：官方 `.FastTrackParticlePath` 默认 `animation-play-state: running`，仅 `data-animation-active=false` 才暂停——0.9.0 移植时写成了无条件 paused，粒子全部冻结在透明首帧。已改为默认 running。
+- **卡片尺寸/字号对齐官方 Popover**（`._Popover_15mw4_2`：`min-width 300px`）：卡片 264 → **300px**、内边距 12 → **16px**、标题 17 → **20px/26px**、副标题 11.5 → **13px**；定位钳制同步 300。
+
 ## [0.9.0] - 2026-10-24
 
 ### 变更（特效系统整体照抄 Codex：四个特效 chunk 逐行移植）
