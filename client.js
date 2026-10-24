@@ -47,7 +47,7 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.3.1'
+    const VERSION = '0.4.0'
     const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
     const CSS = `
@@ -81,11 +81,11 @@ window.__ModuleLoader__.load({
 }
 .dsh-power-seat[data-open="true"] .dsh-power-seat-caret { transform: rotate(180deg); }
 
-/* 面板宿主：portal 到 body，272px 宽，结构对齐 Codex 参考图 */
+/* 面板宿主：portal 到 body，280px 宽，结构对齐 Codex 参考图 */
 .dsh-power-host {
   position: fixed;
   z-index: 9999;
-  width: 272px;
+  width: 280px;
   transform-origin: bottom left;
   animation: dsh-power-in 200ms ${EASE} both;
 }
@@ -97,10 +97,10 @@ window.__ModuleLoader__.load({
 
 .dsh-power-panel {
   position: relative;
-  padding: 14px 14px 10px;
+  padding: 16px 16px 12px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(28, 28, 34, 0.97);
+  border: 1px solid rgba(125, 153, 255, 0.14);
+  background: rgba(23, 27, 41, 0.97);
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
   color: rgba(232, 238, 250, 0.88);
   font-size: 12.5px;
@@ -113,13 +113,13 @@ window.__ModuleLoader__.load({
   align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 .dsh-power-title {
   font-size: 19px;
   font-weight: 700;
   line-height: 1.2;
-  background: linear-gradient(92deg, #c4b5fd 0%, #a78bfa 40%, #818cf8 100%);
+  background: linear-gradient(92deg, #a8beff 0%, #7c9aff 40%, #4d6bfe 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -155,7 +155,15 @@ window.__ModuleLoader__.load({
 }
 .dsh-power-refresh:active { transform: rotate(180deg); }
 
-/* power 滑条：10px 轨道 / 22px 旋钮（Codex 比例），全宽 */
+/* 滑条区：小节标题（对齐 Codex 的「选择推理强度」）+ 10px 轨道 / 22px 旋钮 */
+.dsh-power-slider-caption {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: rgba(232, 238, 250, 0.45);
+  margin-bottom: 6px;
+  animation: dsh-power-fade 220ms ease both;
+}
+.dsh-power-slider-section { animation: dsh-power-fade 220ms ease both; }
 .dsh-power-slider { animation: dsh-power-fade 220ms ease both; }
 @keyframes dsh-power-fade { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .dsh-power-slider { animation: none; } }
@@ -175,29 +183,19 @@ window.__ModuleLoader__.load({
 }
 .dsh-power-hitzone:hover .dsh-power-track {
   background: rgba(255, 255, 255, 0.13);
-  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.10);
+  box-shadow: 0 0 0 4px rgba(77, 107, 254, 0.12);
 }
-.dsh-power-hitzone:focus-visible { outline: 2px solid rgba(139, 92, 246, 0.6); outline-offset: 3px; border-radius: 12px; }
+.dsh-power-hitzone:focus-visible { outline: 2px solid rgba(77, 107, 254, 0.65); outline-offset: 3px; border-radius: 12px; }
 .dsh-power-fill {
   position: absolute;
   inset: 0 auto 0 0;
   border-radius: 999px;
-  background: linear-gradient(90deg, #7c3aed 0%, #6366f1 55%, #3b82f6 100%);
+  background: linear-gradient(90deg, #4d6bfe 0%, #5e84ff 55%, #8fb0ff 100%);
   transition: width 280ms ${EASE};
 }
 /* 拖拽/滚动中：fill 与旋钮的位移不走过渡，1:1 跟手 */
 .dsh-power-hitzone[data-live="true"] .dsh-power-fill { transition: none; }
 .dsh-power-hitzone[data-live="true"] .dsh-power-knob { transition: box-shadow 160ms ease, transform 160ms ${EASE}; }
-.dsh-power-tick {
-  position: absolute;
-  top: 50%;
-  width: 3px;
-  height: 3px;
-  margin: -1.5px 0 0 -1.5px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.4);
-  pointer-events: none;
-}
 /* 星点：固定 5 槽位，按填充比例淡入淡出（不重挂载，无闪烁） */
 .dsh-power-star {
   position: absolute;
@@ -242,7 +240,7 @@ window.__ModuleLoader__.load({
 .dsh-power-hitzone:hover .dsh-power-knob { transform: translate(-50%, -50%) scale(1.06); }
 .dsh-power-hitzone[data-live="true"] .dsh-power-knob {
   transform: translate(-50%, -50%) scale(1.15);
-  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.5), 0 0 0 6px rgba(124, 58, 237, 0.16);
+  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.5), 0 0 0 6px rgba(77, 107, 254, 0.20);
 }
 
 /* 档位标签：激活只变色不变字重（字重会挤压相邻标签造成抖动） */
@@ -274,8 +272,8 @@ window.__ModuleLoader__.load({
 /* 分隔线 + 模型列表（内联，对齐 Codex 截图：滑条下方直接是模型区） */
 .dsh-power-divider {
   height: 1px;
-  margin: 12px 0 8px;
-  background: rgba(255, 255, 255, 0.07);
+  margin: 14px 0 8px;
+  background: rgba(125, 153, 255, 0.10);
 }
 .dsh-power-models-heading {
   font-size: 11px;
@@ -299,8 +297,8 @@ window.__ModuleLoader__.load({
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  width: 100%;
-  padding: 6px 8px;
+  width: calc(100% - 12px);
+  padding: 7px 8px;
   margin: 0 6px;
   border: none;
   border-radius: 9px;
@@ -309,11 +307,10 @@ window.__ModuleLoader__.load({
   font-size: 12.5px;
   text-align: left;
   cursor: pointer;
-  width: calc(100% - 12px);
   transition: background 140ms ease, color 140ms ease;
 }
 .dsh-power-model-row:hover { background: rgba(255, 255, 255, 0.07); }
-.dsh-power-model-row[data-current="true"] { color: #c4b5fd; }
+.dsh-power-model-row[data-current="true"] { color: #9db8ff; }
 .dsh-power-model-check {
   flex: none;
   font-size: 11px;
@@ -494,15 +491,6 @@ window.__ModuleLoader__.load({
                 },
               }, STAR_SVG)),
             ),
-            count > 2 && efforts.map((effort, index) => (
-              index !== 0 && index !== count - 1
-                ? h('span', {
-                  key: `tick-${effort.id ?? index}`,
-                  className: 'dsh-power-tick',
-                  style: { left: `${stopPosition(index, count)}%` },
-                })
-                : null
-            )),
             h('div', { className: 'dsh-power-knob', style: { left: `${fill}%` } }),
           ),
         ),
@@ -619,11 +607,14 @@ window.__ModuleLoader__.load({
           h('div', null,
             h('button', { type: 'button', className: 'dsh-power-retry', onClick: () => load() }, '重试')),
         ),
-        efforts.length > 0 && h(PowerSlider, {
-          efforts,
-          value: shownEffort,
-          onPick: pickEffort,
-        }),
+        efforts.length > 0 && h('div', { className: 'dsh-power-slider-section' },
+          h('div', { className: 'dsh-power-slider-caption' }, '选择推理强度'),
+          h(PowerSlider, {
+            efforts,
+            value: shownEffort,
+            onPick: pickEffort,
+          }),
+        ),
         topEffort && h('div', { className: 'dsh-power-hint' }, '使用额度消耗更快'),
         h('div', { className: 'dsh-power-divider' }),
         h('div', { className: 'dsh-power-models-heading' }, '选择模型'),
