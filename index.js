@@ -30,8 +30,13 @@ export const name = 'power-picker'
 const DIAG_LOG = join(homedir(), '.dsh', 'power-picker-debug.log')
 
 export const Config = Schema.object({
-  /** 关闭后客户端不再遮蔽内置选择器，模型选择恢复原样（无需卸载插件）。 */
+  /** 关闭后客户端不再注册任何入口，模型选择恢复原样（无需卸载插件）。 */
   enabled: Schema.boolean().default(true).description('是否启用 Codex 风格选择器'),
+  /**
+   * 输入栏是否保留一个入口。默认 false（Codex 同款：入口只在会话头顶部，
+   * 输入栏没有模型控件）；true 时顶部 + 输入栏双入口。
+   */
+  composerSeat: Schema.boolean().default(false).description('输入栏是否保留模型入口（默认只保留顶部入口）'),
 })
 
 export function apply(ctx, config) {
@@ -60,9 +65,13 @@ export function apply(ctx, config) {
         }
         const path = (req.url ?? '').split('?')[0].replace(/^\/api\/dsh-power-picker/, '')
 
-        // 客户端注册遮蔽前先确认开关。
-        if (path === '/enabled' && req.method === 'GET') {
-          send(200, { enabled: config.enabled !== false, name })
+        // 客户端注册前读取设置：enabled 总开关 + composerSeat 入口位置。
+        if (path === '/settings' && req.method === 'GET') {
+          send(200, {
+            enabled: config.enabled !== false,
+            composerSeat: config.composerSeat === true,
+            name,
+          })
           return
         }
 

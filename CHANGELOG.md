@@ -2,6 +2,15 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.5.0] - 2026-10-24
+
+### 变更（入口位置对齐 Codex + 背景回归中性）
+
+- **顶部入口**：按 Codex 参考图圈注，模型选择入口移到**会话头标题旁的动作区**（`conversation.session.header.actions`，order -20）——顶部显示「模型名 · 档位」，点击面板**向下展开**（新 `--down` 入场动画）。注册姿势照 `ui-agent-preset` 同款范例。
+- **输入栏座位默认隐藏**：Codex 的输入栏没有模型控件，`conversation.input.model` 槽位默认遮蔽为空；新配置 `composerSeat: true` 可恢复顶部 + 输入栏双入口。
+- **背景回归中性**：面板底色退回 `rgba(28,28,34,0.97)`、描边 `rgba(255,255,255,0.08)`、分隔线 `rgba(255,255,255,0.07)`（0.4.0 的蓝色底撤销）；DeepSeek 蓝只保留在强调位（标题渐变、滑条填充、光圈、当前模型文字）。
+- 服务端 `/enabled` 端点升级为 `/settings`（`{enabled, composerSeat}`）。
+
 ## [0.4.0] - 2026-10-24
 
 ### 变更（配色换 DeepSeek 品牌蓝 + 对齐 Codex 布局差异）

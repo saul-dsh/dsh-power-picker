@@ -47,7 +47,7 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.4.0'
+    const VERSION = '0.5.0'
     const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
     const CSS = `
@@ -89,18 +89,54 @@ window.__ModuleLoader__.load({
   transform-origin: bottom left;
   animation: dsh-power-in 200ms ${EASE} both;
 }
+/* 顶部入口的面板向下展开 */
+.dsh-power-host--down { transform-origin: top left; animation-name: dsh-power-in-down; }
+@keyframes dsh-power-in-down {
+  from { opacity: 0; transform: translateY(-6px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 @keyframes dsh-power-in {
   from { opacity: 0; transform: translateY(6px) scale(0.96); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 @media (prefers-reduced-motion: reduce) { .dsh-power-host { animation: none; } }
 
+/* 顶部入口（Codex 同位：会话头标题旁的动作区） */
+.dsh-power-top {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 240px;
+  height: 26px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.72));
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+.dsh-power-top:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
+  color: var(--dsw-alias-label-primary, rgba(232, 238, 250, 0.9));
+}
+.dsh-power-top[disabled] { opacity: 0.5; cursor: default; }
+.dsh-power-top .dsh-power-seat-label { font-size: 12px; }
+.dsh-power-top .dsh-power-seat-caret {
+  font-size: 9px;
+  opacity: 0.7;
+  transition: transform 180ms ${EASE};
+}
+.dsh-power-top[data-open="true"] .dsh-power-seat-caret { transform: rotate(180deg); }
+
 .dsh-power-panel {
   position: relative;
   padding: 16px 16px 12px;
   border-radius: 14px;
-  border: 1px solid rgba(125, 153, 255, 0.14);
-  background: rgba(23, 27, 41, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(28, 28, 34, 0.97);
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
   color: rgba(232, 238, 250, 0.88);
   font-size: 12.5px;
@@ -273,7 +309,7 @@ window.__ModuleLoader__.load({
 .dsh-power-divider {
   height: 1px;
   margin: 14px 0 8px;
-  background: rgba(125, 153, 255, 0.10);
+  background: rgba(255, 255, 255, 0.07);
 }
 .dsh-power-models-heading {
   font-size: 11px;
@@ -686,11 +722,14 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * 座位组件。props 契约与内置 ModelSelect 一致：
-     * { locked }（owner）+ { available, directory, load, select }（inject 脸，
-     * 其中 directory 是 SnapshotStore）。
+     * 入口组件，两种形态共用一套面板：
+     *  - variant='top'：会话头动作区（Codex 同位），面板向下展开；
+     *  - variant='seat'：输入栏模型座位（props 契约同内置 ModelSelect，
+     *    含 owner 的 locked），面板向上展开。
+     * inject 脸均为 { available, directory, load, select }。
      */
-    function PowerPicker({ locked, available, directory, load, select }) {
+    function PowerPicker({ variant = 'seat', locked, available, directory, load, select }) {
+      const isTop = variant === 'top'
       const [open, setOpen] = React.useState(false)
       const seatRef = React.useRef(null)
       const panelRef = React.useRef(null)
@@ -711,29 +750,31 @@ window.__ModuleLoader__.load({
         ? (effortName ? `${modelName} · ${effortName}` : modelName)
         : '选择推理强度'
 
-      // 面板贴着座位按钮上沿，随输入栏位置走。
+      // 面板贴着入口按钮：顶部入口向下展开，输入栏座位向上展开。
       React.useLayoutEffect(() => {
         if (!open) return
         const panel = panelRef.current
         const seat = seatRef.current
         if (!panel || !seat) return
         const rect = seat.getBoundingClientRect()
-        panel.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 284))}px`
-        panel.style.top = `${Math.max(8, rect.top - panel.offsetHeight - 8)}px`
-      }, [open])
+        panel.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 292))}px`
+        panel.style.top = isTop
+          ? `${Math.min(window.innerHeight - 16, rect.bottom + 8)}px`
+          : `${Math.max(8, rect.top - panel.offsetHeight - 8)}px`
+      }, [open, isTop])
 
       if (!available || !directory) return null
       return h('div', { ref: seatRef, style: { display: 'inline-flex', position: 'relative' } },
         h('button', {
           type: 'button',
-          className: 'dsh-power-seat',
+          className: isTop ? 'dsh-power-top' : 'dsh-power-seat',
           'data-open': open ? 'true' : 'false',
           disabled: !!locked,
           'aria-haspopup': 'dialog',
           'aria-expanded': open ? 'true' : 'false',
           title: '选择模型与推理强度',
           onClick: () => {
-            report(open ? 'close' : 'open', {})
+            report(open ? 'close' : 'open', { variant })
             if (!open) { try { load() } catch { /* ignore */ } }
             setOpen((value) => !value)
           },
@@ -742,10 +783,14 @@ window.__ModuleLoader__.load({
           h('span', { className: 'dsh-power-seat-caret' }, '▾'),
         ),
         // 面板 portal 到 body（react-dom 的 createPortal，内置选择器同款）：
-        // 输入栏祖先链的 transform/overflow 会把 fixed 面板裁没。加载器给不了
-        // react-dom 时退回原地渲染并上报。崩溃兜底只包面板——座位按钮永远活着。
+        // 头部/输入栏祖先链的 transform/overflow 会把 fixed 面板裁没。加载器
+        // 给不了 react-dom 时退回原地渲染并上报。崩溃兜底只包面板——按钮永远活着。
         open && (() => {
-          const panel = h('div', { ref: panelRef, className: 'dsh-power-host', style: { left: -9999, top: -9999 } },
+          const panel = h('div', {
+            ref: panelRef,
+            className: `dsh-power-host${isTop ? ' dsh-power-host--down' : ''}`,
+            style: { left: -9999, top: -9999 },
+          },
             h(QuietBoundary, null, h(PickerPanel, { store: directory, select, load, onClose: close })))
           return createPortal ? createPortal(panel, document.body) : panel
         })(),
@@ -774,52 +819,66 @@ window.__ModuleLoader__.load({
         })
         console.info(`[dsh-power-picker] client ${VERSION} loading`)
 
-        // 可选注入：服务齐了才注册遮蔽；缺服务时内置选择器原样保留。
+        // 可选注入：服务齐了才注册；缺服务时内置选择器原样保留。
         ctx.inject(['slots', 'sessions', 'remote', 'remote.session', 'modelDirectories'], (scope) => {
           const gate = Promise.race([
-            fetch(`${ENDPOINT}/enabled`)
-              .then((res) => (res.ok ? res.json() : { enabled: true }))
-              .catch(() => ({ enabled: true })),
-            new Promise((resolve) => setTimeout(() => resolve({ enabled: true }), 2500)),
+            fetch(`${ENDPOINT}/settings`)
+              .then((res) => (res.ok ? res.json() : { enabled: true, composerSeat: false }))
+              .catch(() => ({ enabled: true, composerSeat: false })),
+            new Promise((resolve) => setTimeout(() => resolve({ enabled: true, composerSeat: false }), 2500)),
           ])
 
-          gate.then(({ enabled }) => {
+          gate.then(({ enabled, composerSeat }) => {
             if (enabled === false) {
               report('skip-disabled', {})
               return
             }
+            // 两个入口共用同一张 inject 脸（契约同内置 ModelSelect）。
+            const faceFor = (sessionId) => {
+              try {
+                const directory = scope.modelDirectories.directoryFor(sessionId)
+                const available = scope.sessions.subagentAddress(sessionId) === undefined
+                return {
+                  available,
+                  // rc.3 契约：组件拿到的是 store（subscribe/getSnapshot 在它身上）。
+                  directory: directory.store,
+                  load: () => {
+                    if (available) directory.load?.()?.catch?.(() => {})
+                  },
+                  select: (selection) => (available
+                    ? directory.select(selection)
+                    : Promise.resolve(undefined)),
+                }
+              } catch (err) {
+                report('inject-error', { message: String(err?.message ?? err) })
+                return {
+                  available: false,
+                  directory: null,
+                  load: () => {},
+                  select: () => Promise.resolve(undefined),
+                }
+              }
+            }
+
+            // 顶部入口（Codex 同位）：会话头标题旁的动作区，order 负值靠标题。
+            scope.slots.inject('conversation.session.header.actions', () => scope.slots.register({
+              name: 'conversation.session.header.actions',
+              id: 'power-picker',
+              order: -20,
+              inject: faceFor,
+            }, (props) => h(QuietBoundary, null, h(PowerPicker, { ...props, variant: 'top' }))))
+
+            // 输入栏座位：默认遮蔽成空（Codex 的输入栏没有模型控件）；
+            // composerSeat=true 时保留座位形态双入口。
             scope.slots.inject('conversation.input.model', () => scope.slots.register({
               name: 'conversation.input.model',
               id: 'power-picker',
               priority: SHADOW_PRIORITY,
-              inject: (sessionId) => {
-                try {
-                  const directory = scope.modelDirectories.directoryFor(sessionId)
-                  const available = scope.sessions.subagentAddress(sessionId) === undefined
-                  report('inject', { available, sessionId: String(sessionId) })
-                  return {
-                    available,
-                    // rc.3 契约：组件拿到的是 store（subscribe/getSnapshot 在它身上）。
-                    directory: directory.store,
-                    load: () => {
-                      if (available) directory.load?.()?.catch?.(() => {})
-                    },
-                    select: (selection) => (available
-                      ? directory.select(selection)
-                      : Promise.resolve(undefined)),
-                  }
-                } catch (err) {
-                  report('inject-error', { message: String(err?.message ?? err) })
-                  return {
-                    available: false,
-                    directory: null,
-                    load: () => {},
-                    select: () => Promise.resolve(undefined),
-                  }
-                }
-              },
-            }, (props) => h(PowerPicker, props)))
-            report('register', { priority: SHADOW_PRIORITY })
+              inject: faceFor,
+            }, composerSeat
+              ? (props) => h(QuietBoundary, null, h(PowerPicker, props))
+              : () => null))
+            report('register', { priority: SHADOW_PRIORITY, composerSeat: !!composerSeat })
           }).catch((err) => report('gate-error', { message: String(err?.message ?? err) }))
         })
       },
