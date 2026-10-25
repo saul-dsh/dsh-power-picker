@@ -5,6 +5,8 @@
 
 A **Codex-style model & reasoning-effort picker** for DeepSeek Harness (dsh): the composer's model seat is reshaped into the OpenAI Codex desktop form — a gradient power slider for reasoning effort, twinkling stars, a big white knob, and a provider-grouped model list. The look is Codex; the data flows entirely through dsh's official session model directory.
 
+![Model and reasoning-effort panel](docs/panel.png)
+
 ## How it works
 
 1. `conversation.input.model` is a **single slot**; dsh renders only the lowest-priority registration. This plugin registers at `priority: -1` and **legitimately shadows** the built-in picker (source: ui-slots — "register at a different priority to shadow it (lowest renders)").

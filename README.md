@@ -5,6 +5,8 @@
 
 dsh（DeepSeek Harness）的 **Codex 风格模型与推理强度选择器**：把输入栏的模型选择区改造成 OpenAI Codex 桌面端的形态——渐变 power 滑条（推理强度）、星点动效、白色大旋钮、按 provider 分组的模型列表。界面是 Codex 的，数据全部走 dsh 官方通路。
 
+![模型与推理强度面板](docs/panel.png)
+
 ## 效果
 
 - 点击输入栏的模型座位，弹出 Codex 风格面板：
