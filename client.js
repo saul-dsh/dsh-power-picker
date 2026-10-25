@@ -47,7 +47,7 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.10.1'
+    const VERSION = '0.10.2'
     const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
     const CSS = `
@@ -954,10 +954,15 @@ window.__ModuleLoader__.load({
      *  - tween = 0.3s cubic-bezier(.23,1,.32,1)（官方 j3r 常量，CSS 过渡实现）
      */
     function PowerSlider({ efforts, value, onPick }) {
-      const trackRef = React.useRef(null)
+      const hitzoneRef = React.useRef(null)
+      const fillRef = React.useRef(null)
+      const knobRef = React.useRef(null)
       const grabRef = React.useRef(null)
+      const dragRef = React.useRef(null)
       const wheelRef = React.useRef({ accumulated: 0, lastTime: 0 })
-      const [drag, setDrag] = React.useState(null)
+      const [dragging, setDragging] = React.useState(false)
+      const [previewIndex, setPreviewIndex] = React.useState(null)
+      const [previewPct, setPreviewPct] = React.useState(null)
       const [labels, setLabels] = React.useState(false)
 
       // 官方 16ms 启用：挂载后短暂延迟才开启位移过渡，开面板时旋钮就位不飞入
@@ -978,38 +983,37 @@ window.__ModuleLoader__.load({
 
       const count = efforts.length
       const activeIndex = Math.max(0, efforts.findIndex((effort) => effort.id === value))
-      const shownIndex = drag ? drag.index : activeIndex
+      const shownIndex = dragging && previewIndex !== null ? previewIndex : activeIndex
       // 拖拽中用连续原始百分比（官方 ve 目标 = pe 原始值，非吸附档位）
-      const fill = drag ? drag.pct : stopPosition(activeIndex, count)
+      const fill = dragging && previewPct !== null ? previewPct : stopPosition(activeIndex, count)
       const isMax = count >= 3 && value === efforts[count - 1]?.id
       const reducedMotion = typeof window !== 'undefined'
         && typeof window.matchMedia === 'function'
         && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
+      // 旋钮/填充位置直接写 DOM（ref），拖拽路径零渲染依赖——任何档位都能拖
+      const applyPos = (pct) => {
+        if (fillRef.current) fillRef.current.style.width = `calc(${pct}% + 14px)`
+        if (knobRef.current) knobRef.current.style.left = `${pct}%`
+      }
+
       const onPointerDown = (event) => {
         if (count <= 1 || event.button !== 0) return
-        event.currentTarget.setPointerCapture?.(event.pointerId)
-        const rect = event.currentTarget.getBoundingClientRect()
-        const thumbOffset = event.clientX - rect.left - (fill / 100) * rect.width
-        grabRef.current = { trackStart: rect.left, trackWidth: rect.width, thumbOffset }
-        const pct = Math.min(100, Math.max(0, ((event.clientX - rect.left) / rect.width) * 100))
-        setDrag({ pct, index: Math.round((pct / 100) * (count - 1)) })
+        const rect = hitzoneRef.current.getBoundingClientRect()
+        const startPct = stopPosition(activeIndex, count)
+        // 官方 thumbOffset：抓住偏移，拖动保持抓取点不跳指针
+        grabRef.current = {
+          start: rect.left,
+          width: rect.width,
+          offset: event.clientX - rect.left - (startPct / 100) * rect.width,
+        }
+        dragRef.current = { pct: startPct, index: activeIndex }
+        setDragging(true)
+        setPreviewIndex(activeIndex)
+        setPreviewPct(startPct)
+        applyPos(startPct)
         // 官方 C3r=150：按住 150ms 后显示端点标签
-        setTimeout(() => setDrag((current) => (current !== null ? (setLabels(true), current) : current)), 150)
-      }
-      const onPointerMove = (event) => {
-        const grab = grabRef.current
-        if (drag === null || grab === null) return
-        const raw = Math.min(1, Math.max(0, (event.clientX - grab.trackStart - grab.thumbOffset) / grab.trackWidth))
-        setDrag({ pct: raw * 100, index: Math.round(raw * (count - 1)) })
-      }
-      const onPointerUp = () => {
-        if (drag === null) return
-        setLabels(false)
-        const index = drag.index
-        setDrag(null)
-        const effort = efforts[index]
-        if (effort && effort.id !== value) onPick(effort.id)
+        setTimeout(() => setLabels(true), 150)
       }
       // 官方滚轮换档：累积 ±30px 触发一步，方向反转或 160ms 停顿即重置
       const onWheel = (event) => {
@@ -1044,9 +1048,46 @@ window.__ModuleLoader__.load({
         }
       }
 
+      // 拖拽监听挂 window：不依赖 React 状态闭包与元素捕获，任何档位可拖
+      React.useEffect(() => {
+        if (!dragging) return undefined
+        const move = (event) => {
+          const grab = grabRef.current
+          if (grab === null) return
+          const raw = Math.min(1, Math.max(0, (event.clientX - grab.start - grab.offset) / grab.width))
+          const pct = raw * 100
+          dragRef.current = { pct, index: Math.round(raw * (count - 1)) }
+          applyPos(pct)
+          const index = dragRef.current.index
+          setPreviewIndex((current) => (current === index ? current : index))
+          setPreviewPct((current) => (current === pct ? current : pct))
+        }
+        const up = () => {
+          setLabels(false)
+          const committed = dragRef.current
+          grabRef.current = null
+          dragRef.current = null
+          setDragging(false)
+          setLabels(false)
+          setPreviewPct(null)
+          if (committed !== null) {
+            const effort = efforts[committed.index]
+            if (effort && effort.id !== value) onPick(effort.id)
+          }
+        }
+        window.addEventListener('pointermove', move)
+        window.addEventListener('pointerup', up)
+        window.addEventListener('pointercancel', up)
+        return () => {
+          window.removeEventListener('pointermove', move)
+          window.removeEventListener('pointerup', up)
+          window.removeEventListener('pointercancel', up)
+        }
+      }, [dragging, count, efforts, value, onPick])
+
       return h('div', { className: 'dsh-power-slider' },
         h('div', {
-          ref: trackRef,
+          ref: hitzoneRef,
           className: 'dsh-power-hitzone',
           role: 'slider',
           tabIndex: 0,
@@ -1055,13 +1096,10 @@ window.__ModuleLoader__.load({
           'aria-valuemax': Math.max(0, count - 1),
           'aria-valuenow': activeIndex,
           'aria-valuetext': efforts[activeIndex]?.name ?? '',
-          'data-live': drag !== null ? 'true' : 'false',
+          'data-live': dragging ? 'true' : 'false',
           'data-armed': armed ? 'true' : 'false',
           'data-burst': burst ? 'true' : 'false',
           onPointerDown,
-          onPointerMove,
-          onPointerUp,
-          onPointerCancel: onPointerUp,
           onWheel,
           onKeyDown,
         },
@@ -1069,7 +1107,7 @@ window.__ModuleLoader__.load({
           // 粒子层；TickRail、Thumb、Burst 在 Root 层——28px 旋钮不被裁剪
           h('div', { className: 'dsh-power-track' },
             // 官方填充延伸到旋钮中心 + 半旋钮宽（clip 公式 - D3r/2）
-            h('div', { className: 'dsh-power-fill', style: { width: `calc(${fill}% + 14px)` } },
+            h('div', { ref: fillRef, className: 'dsh-power-fill', style: { width: `calc(${fill}% + 14px)` } },
               h(FastTrackParticles, { percent: fill }),
               isMax && h(MaxFill, { active: true, reducedMotion }),
               // 官方图 2：蓝填充上的白色刻度点（随填充宽度裁剪）
@@ -1099,7 +1137,7 @@ window.__ModuleLoader__.load({
           )),
           isMax && h(MaxTrackParticles, null),
           burst && h('span', { className: 'dsh-power-burst-host', style: { left: `${fill}%` } }, h(Burst)),
-          h('div', { className: 'dsh-power-knob', style: { left: `${fill}%` } }),
+          h('div', { ref: knobRef, className: 'dsh-power-knob', style: { left: `${fill}%` } }),
           // 官方端点标签：交互 150ms 后显示首末档位名（areEndpointLabelsVisible）
           labels && count > 1 && h('div', { className: 'dsh-power-endlabels', 'aria-hidden': true },
             h('span', null, efforts[0]?.name ?? ''),
@@ -1272,15 +1310,14 @@ window.__ModuleLoader__.load({
                   ),
             )
           : h('div', { key: 'root', className: 'dsh-power-pane' },
-              efforts.length > 0 && h('div', { className: 'dsh-power-slider-section' },
-                h('div', { className: 'dsh-power-slider-caption' }, '选择推理强度'),
-                h(PowerSlider, {
-                  efforts,
-                  value: shownEffort,
-                  onPick: pickEffort,
-                }),
-              ),
-              topEffort && h('div', { className: 'dsh-power-hint' }, '使用额度消耗更快'),
+        efforts.length > 0 && h('div', { className: 'dsh-power-slider-section' },
+          h('div', { className: 'dsh-power-slider-caption' }, '选择推理强度'),
+          h(PowerSlider, {
+            efforts,
+            value: shownEffort,
+            onPick: pickEffort,
+          }),
+        ),
             ),
       )
     }
