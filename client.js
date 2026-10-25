@@ -47,7 +47,7 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.9.2'
+    const VERSION = '0.9.3'
     const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
     const CSS = `
@@ -101,9 +101,10 @@ window.__ModuleLoader__.load({
   padding: 16px;
   border: 0;
   border-radius: var(--dsw-radius-lg, 14px);
-  /* 官方卡片底色即 specific-menu 令牌（含官方毛玻璃），随主题联动 */
-  background: var(--dsw-specific-menu, #1c1c22);
-  backdrop-filter: var(--dsw-menu-backdrop-filter, blur(24px));
+  /* 官方卡 = rgba(48,49,54,.94) + blur(40px) saturate(150%)（已装 asar 实测）。
+     94% 透明度在无毛玻璃的宿主层会露底，这里预合成不透明等色：
+     0.94×rgb(48,49,54) + 0.06×rgb(32,33,36)（dsh 暗底）= rgb(47,48,53) */
+  background: #2f3035;
   box-shadow: var(--dsw-elevation-prominent, 0 12px 36px rgba(0, 0, 0, 0.45));
   color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.72));
   font-size: 12px;
