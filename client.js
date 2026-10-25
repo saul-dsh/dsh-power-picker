@@ -1082,10 +1082,6 @@ window.__ModuleLoader__.load({
               })
               : null
           )),
-          isMax && h('span', {
-            className: 'dsh-power-mfx',
-            style: { transform: `translateX(calc((${fill} - 100) * 1%))` },
-          }, h(MaxTrackParticles, null)),
           burst && h('span', { className: 'dsh-power-burst-host', style: { left: `${fill}%` } }, h(Burst)),
           h('div', { ref: knobRef, className: 'dsh-power-knob', style: { left: `${fill}%` } }),
           // 官方端点标签：交互 150ms 后显示首末档位名（areEndpointLabelsVisible）
