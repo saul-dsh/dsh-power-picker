@@ -47,7 +47,7 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.11.3'
+    const VERSION = '0.12.1'
     const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
     const CSS = `
@@ -220,6 +220,8 @@ window.__ModuleLoader__.load({
   width: 100%;
   height: 28px;
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
   display: flex;
   position: relative;
   cursor: var(--cursor-interaction, pointer);
@@ -351,24 +353,6 @@ window.__ModuleLoader__.load({
   to { opacity: 0; transform: translate(calc(-50% + var(--particle-x)), calc(-50% + var(--particle-y))) scale(0.55); }
 }
 /* _Fill/_Mask/_Canvas_1azzv：MAX 档 WebGL 紫色辉光（官方 MaxFill，GLSL 逐行移植） */
-/* MAX 档星屑：官方 SparkleFill 四角星 + 闪烁 */
-.dsh-power-sparkles {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-.dsh-power-sparkle {
-  position: absolute;
-  color: rgba(255, 255, 255, 0.85);
-  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.4));
-  transform: translate(-50%, -50%);
-  animation: dsh-power-sparkle-twinkle 2.6s ease-in-out infinite;
-}
-@keyframes dsh-power-sparkle-twinkle {
-  0%, 100% { opacity: 0.35; transform: translate(-50%, -50%) scale(0.7) rotate(0deg); }
-  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.15) rotate(18deg); }
-}
-@media (prefers-reduced-motion: reduce) { .dsh-power-sparkle { animation: none; } }
 /* 官方 g3r 变换层：粒子层跟随旋钮平移（(百分比-100)×n%），
    圆点层 n=1、辉光层 n=-0.9（官方 Te 的系数）——两层反向视差 */
 .dsh-power-mfx {
@@ -388,32 +372,21 @@ window.__ModuleLoader__.load({
 /* _Tick_1bucx_40：4px 刻度点，官方配色（选中白 30% / 未选中 description 50%）、
    悬停放大 2 倍 + 降亮（官方 data-pointer-down=false hover 规则）、
    滑条悬停时整排淡出缩小（官方 data-highlighted） */
-/* _Tick_1bucx_40：4px 刻度点 = 官方 ExplicitOption 按钮（点击选档） */
+/* 档位点击热区：透明不可见（用户要求滑条上只留动态粒子），
+   保留点击选档能力 */
 .dsh-power-tick {
   appearance: none;
   border: none;
   padding: 0;
   position: absolute;
   top: 50%;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background-color: currentColor;
-  color: color-mix(in srgb, rgba(232, 238, 250, 1) 50%, transparent);
+  width: 12px;
+  height: 28px;
+  margin-left: -6px;
+  background: transparent;
   pointer-events: auto;
   cursor: var(--cursor-interaction, pointer);
-  transform: translate(-50%, -50%);
-  transition: background-color var(--dsh-power-motion-duration, 0.3s) var(--dsh-power-motion-easing, ease),
-    opacity 0.2s ease-in-out, filter 0.12s ease, transform 0.12s ease;
-}
-.dsh-power-tick[data-selected="true"] { color: #ffffff4d; }
-.dsh-power-tick:hover {
-  filter: brightness(0.85);
-  transform: translate(-50%, -50%) scale(2);
-}
-.dsh-power-hitzone:hover .dsh-power-tick {
-  opacity: 0;
-  transform: translate(-50%, -50%) scale(0.75);
+  transform: translate(0, -50%);
 }
 /* 官方端点标签：交互 150ms 后显示首末档位名 */
 .dsh-power-endlabels {
@@ -506,17 +479,6 @@ window.__ModuleLoader__.load({
 .dsh-power-panel .dsh-power-title-btn,
 .dsh-power-panel .dsh-power-title-caret,
 .dsh-power-panel .dsh-power-subtitle { display: none; }
-/* 滑条填充内的白色刻度点（官方图 2：蓝填充上白点） */
-.dsh-power-tick-fill {
-  position: absolute;
-  top: 50%;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.85);
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-}
 
 /* 模型列表 pane（Codex：标题点击后展开；返回行 + 分组 + 行式条目） */
 .dsh-power-pane { animation: dsh-power-pane-in 160ms ${EASE} both; }
@@ -698,33 +660,6 @@ window.__ModuleLoader__.load({
     const rand = (index, seed) => {
       const n = Math.sin((index + 1) * 12.9898 + seed * 78.233) * 43758.5453
       return n - Math.floor(n)
-    }
-
-    /* _SparkleFill（SparkleFill-5aac8b9e9057 chunk 逐行移植）：
-       官方四角星 SVG（viewBox 0 0 24 24，1em currentColor） */
-    const SPARKLE_PATH = 'M13.4195 3.01782C13.3378 2.29622 12.7277 1.75077 12.0015 1.75003C11.2753 1.74929 10.664 2.29349 3.01489 10.5809C2.29346 10.6641 1.74926 11.2753 1.75 12.0015C1.75074 12.7277 2.29619 13.3378 3.01779 13.4195C7.45809 13.9225 10.1766 16.4402 10.577 20.9479C10.6426 21.6856 11.261 22.2509 12.0016 22.25C12.7422 22.2492 13.3594 21.6825 13.4233 20.9447C13.8079 16.5008 16.5007 13.808 20.9446 13.4233C21.6825 13.3594 22.2492 12.7422 22.25 12.0016C22.2508 11.261 21.6855 10.6426 20.9478 10.5771C16.4402 10.1767 13.9224 7.45813 13.4195 3.01782Z'
-    const Sparkle = ({ size, style }) => h('span', {
-      className: 'dsh-power-sparkle',
-      style: { width: `${size}px`, height: `${size}px`, ...style },
-    }, h('svg', { width: '1em', height: '1em', viewBox: '0 0 24 24', fill: 'currentColor', 'aria-hidden': true },
-      h('path', { d: SPARKLE_PATH })))
-
-    /* MAX 档填充上的官方星屑：5 颗微光 SparkleFill（1~2px 级观感，细小克制） */
-    function MaxSparkles() {
-      const items = []
-      for (let i = 0; i < 5; i += 1) {
-        items.push(h(Sparkle, {
-          key: i,
-          size: 3 + rand(i, 41) * 3.5,
-          style: {
-            left: `${10 + rand(i, 42) * 74}%`,
-            top: `${24 + rand(i, 43) * 52}%`,
-            opacity: 0.4 + rand(i, 44) * 0.45,
-            animationDelay: `${rand(i, 45) * 1.8}s`,
-          },
-        }))
-      }
-      return h('span', { className: 'dsh-power-sparkles', 'aria-hidden': true }, items)
     }
 
     function stopPosition(index, count) {
@@ -1019,16 +954,23 @@ window.__ModuleLoader__.load({
      *  - 按住 150ms 后显示两端端点标签（官方 areEndpointLabelsVisible）
      *  - tween = 0.3s cubic-bezier(.23,1,.32,1)（官方 j3r 常量，CSS 过渡实现）
      */
+    /**
+     * 离散档位滑条——交互按官方 c3r 机制 + 稳定工程化：
+     *  - 指针事件挂 window 且在 pointerdown 内**同步挂载**（无 effect 间隙），
+     *    preventDefault 阻断文字选择
+     *  - 位置走 posRef + 直写 DOM（拖拽零渲染依赖），previewIndex 仅跨档更新
+     *  - 抓住偏移 / 拖拽阻尼 0.15s / 滚轮换档 / 端点标签 / 点击刻度选档
+     */
     function PowerSlider({ efforts, value, onPick }) {
       const hitzoneRef = React.useRef(null)
       const fillRef = React.useRef(null)
       const knobRef = React.useRef(null)
       const grabRef = React.useRef(null)
       const dragRef = React.useRef(null)
+      const posRef = React.useRef(stopPosition(Math.max(0, efforts.findIndex((effort) => effort.id === value)), efforts.length))
       const wheelRef = React.useRef({ accumulated: 0, lastTime: 0 })
       const [dragging, setDragging] = React.useState(false)
       const [previewIndex, setPreviewIndex] = React.useState(null)
-      const [previewPct, setPreviewPct] = React.useState(null)
       const [labels, setLabels] = React.useState(false)
 
       // 官方 16ms 启用：挂载后短暂延迟才开启位移过渡，开面板时旋钮就位不飞入
@@ -1050,23 +992,32 @@ window.__ModuleLoader__.load({
       const count = efforts.length
       const activeIndex = Math.max(0, efforts.findIndex((effort) => effort.id === value))
       const shownIndex = dragging && previewIndex !== null ? previewIndex : activeIndex
-      // 拖拽中用连续原始百分比（官方 ve 目标 = pe 原始值，非吸附档位）
-      const fill = dragging && previewPct !== null ? previewPct : stopPosition(activeIndex, count)
+      const fill = posRef.current
       const isMax = count >= 3 && value === efforts[count - 1]?.id
       const reducedMotion = typeof window !== 'undefined'
         && typeof window.matchMedia === 'function'
         && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-      // 旋钮/填充位置直接写 DOM（ref），拖拽路径零渲染依赖——任何档位都能拖
+      // 旋钮/填充位置直写 DOM；posRef 同步供渲染读取
       const applyPos = (pct) => {
+        posRef.current = pct
         if (fillRef.current) fillRef.current.style.width = `calc(${pct}% + 14px)`
         if (knobRef.current) knobRef.current.style.left = `${pct}%`
       }
 
+      // 提交值变化（选档/外部）后吸附到新档位（CSS 过渡补间这段距离）
+      React.useEffect(() => {
+        if (dragging) return
+        const target = stopPosition(activeIndex, count)
+        if (Math.abs(posRef.current - target) > 0.01) applyPos(target)
+      }, [activeIndex, dragging, count])
+
       const onPointerDown = (event) => {
         if (count <= 1 || event.button !== 0) return
+        // 官方同款：阻断文字选择启动（拖出滑条也不会选中文本）
+        event.preventDefault()
         const rect = hitzoneRef.current.getBoundingClientRect()
-        const startPct = stopPosition(activeIndex, count)
+        const startPct = posRef.current
         // 官方 thumbOffset：抓住偏移，拖动保持抓取点不跳指针
         grabRef.current = {
           start: rect.left,
@@ -1076,10 +1027,37 @@ window.__ModuleLoader__.load({
         dragRef.current = { pct: startPct, index: activeIndex }
         setDragging(true)
         setPreviewIndex(activeIndex)
-        setPreviewPct(startPct)
         applyPos(startPct)
         // 官方 C3r=150：按住 150ms 后显示端点标签
         setTimeout(() => setLabels(true), 150)
+
+        // window 监听在 pointerdown 内同步挂载（无 effect 间隙，不丢首帧）
+        const move = (event) => {
+          const grab = grabRef.current
+          if (grab === null) return
+          const raw = Math.min(1, Math.max(0, (event.clientX - grab.start - grab.offset) / grab.width))
+          const pct = raw * 100
+          dragRef.current = { pct, index: Math.round(raw * (count - 1)) }
+          applyPos(pct)
+          setPreviewIndex((current) => (current === dragRef.current.index ? current : dragRef.current.index))
+        }
+        const up = () => {
+          window.removeEventListener('pointermove', move)
+          window.removeEventListener('pointerup', up)
+          window.removeEventListener('pointercancel', up)
+          setLabels(false)
+          const committed = dragRef.current
+          grabRef.current = null
+          dragRef.current = null
+          setDragging(false)
+          if (committed !== null) {
+            const effort = efforts[committed.index]
+            if (effort && effort.id !== value) onPick(effort.id)
+          }
+        }
+        window.addEventListener('pointermove', move)
+        window.addEventListener('pointerup', up)
+        window.addEventListener('pointercancel', up)
       }
       // 官方滚轮换档：累积 ±30px 触发一步，方向反转或 160ms 停顿即重置
       const onWheel = (event) => {
@@ -1114,43 +1092,6 @@ window.__ModuleLoader__.load({
         }
       }
 
-      // 拖拽监听挂 window：不依赖 React 状态闭包与元素捕获，任何档位可拖
-      React.useEffect(() => {
-        if (!dragging) return undefined
-        const move = (event) => {
-          const grab = grabRef.current
-          if (grab === null) return
-          const raw = Math.min(1, Math.max(0, (event.clientX - grab.start - grab.offset) / grab.width))
-          const pct = raw * 100
-          dragRef.current = { pct, index: Math.round(raw * (count - 1)) }
-          applyPos(pct)
-          const index = dragRef.current.index
-          setPreviewIndex((current) => (current === index ? current : index))
-          setPreviewPct((current) => (current === pct ? current : pct))
-        }
-        const up = () => {
-          setLabels(false)
-          const committed = dragRef.current
-          grabRef.current = null
-          dragRef.current = null
-          setDragging(false)
-          setLabels(false)
-          setPreviewPct(null)
-          if (committed !== null) {
-            const effort = efforts[committed.index]
-            if (effort && effort.id !== value) onPick(effort.id)
-          }
-        }
-        window.addEventListener('pointermove', move)
-        window.addEventListener('pointerup', up)
-        window.addEventListener('pointercancel', up)
-        return () => {
-          window.removeEventListener('pointermove', move)
-          window.removeEventListener('pointerup', up)
-          window.removeEventListener('pointercancel', up)
-        }
-      }, [dragging, count, efforts, value, onPick])
-
       return h('div', { className: 'dsh-power-slider' },
         h('div', {
           ref: hitzoneRef,
@@ -1179,25 +1120,9 @@ window.__ModuleLoader__.load({
               style: { width: `calc(${fill}% + 14px)` },
               'data-max': isMax ? 'true' : 'false',
             },
-              // 官方分层：穿梭圆点恒在；MAX 时叠加 SparkleFill 星屑（视差层）+ WebGL 辉光
+              // 官方分层：穿梭圆点恒在；MAX 时叠加 WebGL 辉光（官方无星形层）
               h(FastTrackParticles, { percent: fill }),
-              isMax && h('span', {
-                className: 'dsh-power-mfx',
-                style: { transform: `translateX(calc((${fill} - 100) * -0.9%))` },
-              }, h(MaxSparkles, null)),
               isMax && h(MaxFill, { active: true, reducedMotion }),
-              // 官方图 2：蓝填充上的白色刻度点（随填充宽度裁剪）
-              count > 2 && h('div', { style: { position: 'absolute', inset: 0, overflow: 'hidden' } },
-                efforts.map((effort, index) => (
-                  index !== 0 && index !== count - 1
-                    ? h('span', {
-                      key: `wtick-${effort.id ?? index}`,
-                      className: 'dsh-power-tick-fill',
-                      style: { left: `${stopPosition(index, count)}%` },
-                    })
-                    : null
-                )),
-              ),
             ),
           ),
           // 官方 TickRail：刻度点是透明的 ExplicitOption 按钮（官方点击选档机制），
@@ -1211,6 +1136,7 @@ window.__ModuleLoader__.load({
                 'data-selected': index === shownIndex ? 'true' : 'false',
                 'aria-label': effort.name ?? effort.id,
                 style: { left: `${stopPosition(index, count)}%` },
+                onClick: () => onPick(effort.id),
               })
               : null
           )),
