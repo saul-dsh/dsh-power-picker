@@ -2,6 +2,13 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.11.0] - 2026-10-24
+
+### 变更（MAX 档星屑：官方 SparkleFill 四角星）
+
+- 提取官方 `SparkleFill-5aac8b9e9057` chunk 的**四角星 SVG 路径**（viewBox 24 全贝塞尔），MAX 档填充上渲染 8 颗官方星形（seeded 位置/大小/闪烁节奏，白色 + 辉光 + 轻微旋转的 twinkle）。
+- 粒子状态区分对齐官方实测：普通档 = 3px 圆点穿梭（FastTrackParticles）；**MAX 档 = 四角星屑 + WebGL 辉光**（此前圆点全状态通用是观感差异主因）。
+
 ## [0.10.2] - 2026-10-24
 
 ### 修复

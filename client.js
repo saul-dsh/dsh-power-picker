@@ -47,7 +47,7 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.10.2'
+    const VERSION = '0.11.0'
     const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
     const CSS = `
@@ -665,6 +665,33 @@ window.__ModuleLoader__.load({
       return n - Math.floor(n)
     }
 
+    /* _SparkleFill（SparkleFill-5aac8b9e9057 chunk 逐行移植）：
+       官方四角星 SVG（viewBox 0 0 24 24，1em currentColor） */
+    const SPARKLE_PATH = 'M13.4195 3.01782C13.3378 2.29622 12.7277 1.75077 12.0015 1.75003C11.2753 1.74929 10.664 2.29349 3.01489 10.5809C2.29346 10.6641 1.74926 11.2753 1.75 12.0015C1.75074 12.7277 2.29619 13.3378 3.01779 13.4195C7.45809 13.9225 10.1766 16.4402 10.577 20.9479C10.6426 21.6856 11.261 22.2509 12.0016 22.25C12.7422 22.2492 13.3594 21.6825 13.4233 20.9447C13.8079 16.5008 16.5007 13.808 20.9446 13.4233C21.6825 13.3594 22.2492 12.7422 22.25 12.0016C22.2508 11.261 21.6855 10.6426 20.9478 10.5771C16.4402 10.1767 13.9224 7.45813 13.4195 3.01782Z'
+    const Sparkle = ({ size, style }) => h('span', {
+      className: 'dsh-power-sparkle',
+      style: { width: `${size}px`, height: `${size}px`, ...style },
+    }, h('svg', { width: '1em', height: '1em', viewBox: '0 0 24 24', fill: 'currentColor', 'aria-hidden': true },
+      h('path', { d: SPARKLE_PATH })))
+
+    /* MAX 档填充上的官方星屑：8 颗 SparkleFill，seeded 位置/大小/闪烁节奏 */
+    function MaxSparkles() {
+      const items = []
+      for (let i = 0; i < 8; i += 1) {
+        items.push(h(Sparkle, {
+          key: i,
+          size: 6 + rand(i, 41) * 8,
+          style: {
+            left: `${8 + rand(i, 42) * 78}%`,
+            top: `${18 + rand(i, 43) * 64}%`,
+            opacity: 0.5 + rand(i, 44) * 0.5,
+            animationDelay: `${rand(i, 45) * 1.6}s`,
+          },
+        }))
+      }
+      return h('span', { className: 'dsh-power-sparkles', 'aria-hidden': true }, items)
+    }
+
     function stopPosition(index, count) {
       return count <= 1 ? 50 : (index / (count - 1)) * 100
     }
@@ -1108,7 +1135,8 @@ window.__ModuleLoader__.load({
           h('div', { className: 'dsh-power-track' },
             // 官方填充延伸到旋钮中心 + 半旋钮宽（clip 公式 - D3r/2）
             h('div', { ref: fillRef, className: 'dsh-power-fill', style: { width: `calc(${fill}% + 14px)` } },
-              h(FastTrackParticles, { percent: fill }),
+              // 官方实测：普通档 = 圆点穿梭；MAX 档 = SparkleFill 四角星 + WebGL 辉光
+              isMax ? h(MaxSparkles, null) : h(FastTrackParticles, { percent: fill }),
               isMax && h(MaxFill, { active: true, reducedMotion }),
               // 官方图 2：蓝填充上的白色刻度点（随填充宽度裁剪）
               count > 2 && h('div', { style: { position: 'absolute', inset: 0, overflow: 'hidden' } },
