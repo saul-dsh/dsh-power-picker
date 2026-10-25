@@ -47,7 +47,7 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.11.0'
+    const VERSION = '0.11.1'
     const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
     const CSS = `
@@ -375,7 +375,11 @@ window.__ModuleLoader__.load({
 /* _Tick_1bucx_40：4px 刻度点，官方配色（选中白 30% / 未选中 description 50%）、
    悬停放大 2 倍 + 降亮（官方 data-pointer-down=false hover 规则）、
    滑条悬停时整排淡出缩小（官方 data-highlighted） */
+/* _Tick_1bucx_40：4px 刻度点 = 官方 ExplicitOption 按钮（点击选档） */
 .dsh-power-tick {
+  appearance: none;
+  border: none;
+  padding: 0;
   position: absolute;
   top: 50%;
   width: 4px;
@@ -1153,8 +1157,9 @@ window.__ModuleLoader__.load({
           h('div', { className: 'dsh-power-track' },
             // 官方填充延伸到旋钮中心 + 半旋钮宽（clip 公式 - D3r/2）
             h('div', { ref: fillRef, className: 'dsh-power-fill', style: { width: `calc(${fill}% + 14px)` } },
-              // 官方实测：普通档 = 圆点穿梭；MAX 档 = SparkleFill 四角星 + WebGL 辉光
-              isMax ? h(MaxSparkles, null) : h(FastTrackParticles, { percent: fill }),
+              // 官方分层：穿梭圆点恒在；MAX 时叠加 SparkleFill 星屑 + WebGL 辉光
+              h(FastTrackParticles, { percent: fill }),
+              isMax && h(MaxSparkles, null),
               isMax && h(MaxFill, { active: true, reducedMotion }),
               // 官方图 2：蓝填充上的白色刻度点（随填充宽度裁剪）
               count > 2 && h('div', { style: { position: 'absolute', inset: 0, overflow: 'hidden' } },
@@ -1170,13 +1175,16 @@ window.__ModuleLoader__.load({
               ),
             ),
           ),
-          // 官方 TickRail：中间档位 4px 刻度点（首尾不画），data-selected 官方配色
+          // 官方 TickRail：刻度点是透明的 ExplicitOption 按钮（官方点击选档机制），
+          // data-selected 官方配色
           count > 2 && efforts.map((effort, index) => (
             index !== 0 && index !== count - 1
-              ? h('span', {
+              ? h('button', {
                 key: `tick-${effort.id ?? index}`,
+                type: 'button',
                 className: 'dsh-power-tick',
                 'data-selected': index === shownIndex ? 'true' : 'false',
+                'aria-label': effort.name ?? effort.id,
                 style: { left: `${stopPosition(index, count)}%` },
               })
               : null
