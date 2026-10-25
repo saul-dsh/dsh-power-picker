@@ -47,7 +47,7 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.11.1'
+    const VERSION = '0.11.2'
     const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
     const CSS = `
@@ -124,7 +124,7 @@ window.__ModuleLoader__.load({
   font-size: 18px;
   font-weight: 700;
   line-height: 24px;
-  background: linear-gradient(92deg, #a8beff 0%, #7c9aff 40%, #4d6bfe 100%);
+  background: linear-gradient(92deg, #c7d2fe 0%, #a5b4fc 45%, #818cf8 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -237,13 +237,17 @@ window.__ModuleLoader__.load({
   box-shadow: inset 0 0 0 0.5px var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.12));
   overflow: hidden;
 }
-/* _Range_1bucx_239：填充实色 chart-blue（官方无渐变，MAX 辉光由 WebGL 层叠加），左圆右直 */
+/* _Range_1bucx_239：填充实色 chart-blue，左圆右直；MAX 时官方观感为紫→蓝渐变
+   （WebGL 辉光层之下再加 CSS 渐变兜底，两层任一生效都是正确观感） */
 .dsh-power-fill {
   position: absolute;
   inset: 0 auto 0 0;
   border-radius: 12px 0 0 12px;
   background: var(--color-chart-blue, #3a83f7);
   transition: width var(--dsh-power-motion-duration, 0.3s) var(--dsh-power-motion-easing, ease);
+}
+.dsh-power-fill[data-max="true"] {
+  background: linear-gradient(90deg, #8b5cf6 0%, #6366f1 45%, #3a83f7 100%);
 }
 /* 官方 data-dragging：拖拽中位移过渡时长降到 0.15s（阻尼跟手，非 1:1） */
 .dsh-power-hitzone[data-live="true"] { --dsh-power-motion-duration: 0.15s; }
@@ -355,10 +359,10 @@ window.__ModuleLoader__.load({
 }
 .dsh-power-sparkle {
   position: absolute;
-  color: rgba(255, 255, 255, 0.92);
-  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.55));
+  color: rgba(255, 255, 255, 0.85);
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.4));
   transform: translate(-50%, -50%);
-  animation: dsh-power-sparkle-twinkle 2.2s ease-in-out infinite;
+  animation: dsh-power-sparkle-twinkle 2.6s ease-in-out infinite;
 }
 @keyframes dsh-power-sparkle-twinkle {
   0%, 100% { opacity: 0.35; transform: translate(-50%, -50%) scale(0.7) rotate(0deg); }
@@ -696,18 +700,18 @@ window.__ModuleLoader__.load({
     }, h('svg', { width: '1em', height: '1em', viewBox: '0 0 24 24', fill: 'currentColor', 'aria-hidden': true },
       h('path', { d: SPARKLE_PATH })))
 
-    /* MAX 档填充上的官方星屑：8 颗 SparkleFill，seeded 位置/大小/闪烁节奏 */
+    /* MAX 档填充上的官方星屑：5 颗微光 SparkleFill（1~2px 级观感，细小克制） */
     function MaxSparkles() {
       const items = []
-      for (let i = 0; i < 8; i += 1) {
+      for (let i = 0; i < 5; i += 1) {
         items.push(h(Sparkle, {
           key: i,
-          size: 6 + rand(i, 41) * 8,
+          size: 3 + rand(i, 41) * 3.5,
           style: {
-            left: `${8 + rand(i, 42) * 78}%`,
-            top: `${18 + rand(i, 43) * 64}%`,
-            opacity: 0.5 + rand(i, 44) * 0.5,
-            animationDelay: `${rand(i, 45) * 1.6}s`,
+            left: `${10 + rand(i, 42) * 74}%`,
+            top: `${24 + rand(i, 43) * 52}%`,
+            opacity: 0.4 + rand(i, 44) * 0.45,
+            animationDelay: `${rand(i, 45) * 1.8}s`,
           },
         }))
       }
@@ -925,7 +929,10 @@ window.__ModuleLoader__.load({
           alpha: true, antialias: false, depth: false,
           powerPreference: 'high-performance', stencil: false,
         })
-        if (gl === null) return undefined
+        if (gl === null) {
+          report('maxfill', { error: 'no-webgl-context' })
+          return undefined
+        }
         const vert = compileShader(gl, gl.VERTEX_SHADER, MAXFILL_VERT)
         const frag = compileShader(gl, gl.FRAGMENT_SHADER, MAXFILL_FRAG)
         if (vert === null || frag === null) {
@@ -941,6 +948,7 @@ window.__ModuleLoader__.load({
         gl.deleteShader(vert)
         gl.deleteShader(frag)
         if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+          report('maxfill', { error: 'program-link-failed' })
           gl.deleteProgram(program)
           return undefined
         }
@@ -1155,8 +1163,13 @@ window.__ModuleLoader__.load({
           // 官方结构：Track 只含填充（overflow hidden 负责圆角裁剪）+ 官方
           // 粒子层；TickRail、Thumb、Burst 在 Root 层——28px 旋钮不被裁剪
           h('div', { className: 'dsh-power-track' },
-            // 官方填充延伸到旋钮中心 + 半旋钮宽（clip 公式 - D3r/2）
-            h('div', { ref: fillRef, className: 'dsh-power-fill', style: { width: `calc(${fill}% + 14px)` } },
+            // 官方填充延伸到旋钮中心 + 半旋钮宽（clip 公式 - D3r/2）；MAX 时紫蓝渐变
+            h('div', {
+              ref: fillRef,
+              className: 'dsh-power-fill',
+              style: { width: `calc(${fill}% + 14px)` },
+              'data-max': isMax ? 'true' : 'false',
+            },
               // 官方分层：穿梭圆点恒在；MAX 时叠加 SparkleFill 星屑 + WebGL 辉光
               h(FastTrackParticles, { percent: fill }),
               isMax && h(MaxSparkles, null),
