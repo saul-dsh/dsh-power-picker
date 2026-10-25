@@ -47,7 +47,7 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.9.3'
+    const VERSION = '0.10.0'
     const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
     const CSS = `
@@ -81,13 +81,12 @@ window.__ModuleLoader__.load({
 }
 .dsh-power-seat[data-open="true"] .dsh-power-seat-caret { transform: rotate(180deg); }
 
-/* 面板宿主：portal 到 body，宽度对齐官方卡片 min(264px, 100vw-24px)；
-   从输入栏右下角入口上方弹出，右对齐（Codex 实测形态） */
+/* 面板宿主：portal 到 body，宽度对齐 Codex 实测 ~250px，居中弹出 */
 .dsh-power-host {
   position: fixed;
   z-index: 9999;
-  width: min(300px, calc(100vw - 24px));
-  transform-origin: bottom right;
+  width: min(250px, calc(100vw - 24px));
+  transform-origin: bottom center;
   animation: dsh-power-in 200ms ${EASE} both;
 }
 @keyframes dsh-power-in {
@@ -98,7 +97,7 @@ window.__ModuleLoader__.load({
 
 .dsh-power-panel {
   position: relative;
-  padding: 16px;
+  padding: 14px;
   border: 0;
   border-radius: var(--dsw-radius-lg, 14px);
   /* 官方卡 = rgba(48,49,54,.94) + blur(40px) saturate(150%)（已装 asar 实测）。
@@ -122,9 +121,9 @@ window.__ModuleLoader__.load({
   display: block;
   max-width: 100%;
   margin: 0 auto;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
-  line-height: 26px;
+  line-height: 24px;
   background: linear-gradient(92deg, #a8beff 0%, #7c9aff 40%, #4d6bfe 100%);
   -webkit-background-clip: text;
   background-clip: text;
@@ -137,12 +136,38 @@ window.__ModuleLoader__.load({
 .dsh-power-subtitle {
   display: block;
   margin-top: 2px;
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.5));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 非最高档时标题用实色 chart-blue（Codex 实测：高=蓝、Ultra=紫渐变） */
+.dsh-power-title-solid {
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  color: var(--color-chart-blue, #3a83f7);
+}
+/* 副标题即模型入口（Codex：模型名 ›，点击展开模型列表） */
+.dsh-power-subtitle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 100%;
+  padding: 1px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.5));
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+.dsh-power-subtitle-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--dsw-alias-label-primary, rgba(232, 238, 250, 0.9));
+}
+.dsh-power-subtitle-caret { flex: none; font-size: 9px; opacity: 0.7; }
 .dsh-power-refresh {
   position: absolute;
   top: -2px;
@@ -416,6 +441,22 @@ window.__ModuleLoader__.load({
   transition: transform 180ms ${EASE};
 }
 .dsh-power-title-btn[data-open="true"] .dsh-power-title-caret { transform: rotate(180deg); }
+
+/* 标题可点击已移至副标题（模型名 ›）；标题本体为当前档位名 */
+.dsh-power-panel .dsh-power-title-btn,
+.dsh-power-panel .dsh-power-title-caret,
+.dsh-power-panel .dsh-power-subtitle { display: none; }
+/* 滑条填充内的白色刻度点（官方图 2：蓝填充上白点） */
+.dsh-power-tick-fill {
+  position: absolute;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
 
 /* 模型列表 pane（Codex：标题点击后展开；返回行 + 分组 + 行式条目） */
 .dsh-power-pane { animation: dsh-power-pane-in 160ms ${EASE} both; }
@@ -969,6 +1010,18 @@ window.__ModuleLoader__.load({
             h('div', { className: 'dsh-power-fill', style: { width: `${fill}%` } },
               h(FastTrackParticles, { percent: fill }),
               isMax && h(MaxFill, { active: true, reducedMotion }),
+              // 官方图 2：蓝填充上的白色刻度点（随填充宽度裁剪）
+              count > 2 && h('div', { style: { position: 'absolute', inset: 0, overflow: 'hidden' } },
+                efforts.map((effort, index) => (
+                  index !== 0 && index !== count - 1
+                    ? h('span', {
+                      key: `wtick-${effort.id ?? index}`,
+                      className: 'dsh-power-tick-fill',
+                      style: { left: `${stopPosition(index, count)}%` },
+                    })
+                    : null
+                )),
+              ),
             ),
           ),
           // 官方 TickRail：中间档位 4px 刻度点（首尾不画）
@@ -1076,26 +1129,29 @@ window.__ModuleLoader__.load({
         })
       }
 
-      const title = model?.name ?? current?.model ?? '模型'
-      const effortName = efforts.find((effort) => effort.id === shownEffort)?.name
+      // Codex 实测：大标题 = 当前推理强度名（非顶档实色蓝，顶档 "Ultra" 紫渐变）；
+      // 副标题 = 模型名 ›（点击展开模型列表）
+      const title = efforts.find((effort) => effort.id === shownEffort)?.name ?? '推理强度'
       const shownIndex = efforts.findIndex((effort) => effort.id === shownEffort)
       const topEffort = efforts.length >= 3 && shownIndex === efforts.length - 1
+      const modelName = model?.name ?? current?.model ?? ''
 
       return h('div', { className: 'dsh-power-panel', role: 'dialog', 'aria-label': '模型与推理强度' },
         h('div', { className: 'dsh-power-header' },
-          h('div', { style: { minWidth: 0 } },
+          h('div', { style: { minWidth: 0, width: '100%' } },
+            h('span', {
+              className: topEffort ? 'dsh-power-title' : 'dsh-power-title dsh-power-title-solid',
+            }, title),
             h('button', {
               type: 'button',
-              className: 'dsh-power-title-btn',
-              'data-open': pane === 'models' ? 'true' : 'false',
+              className: 'dsh-power-subtitle-btn',
               title: '选择其他模型',
               onClick: () => setPane((value) => (value === 'models' ? 'root' : 'models')),
             },
-              h('span', { className: 'dsh-power-title' }, title),
-              h('span', { className: 'dsh-power-title-caret' }, '▾'),
+              h('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
+                modelName || current?.provider || '选择模型'),
+              h('span', { className: 'dsh-power-subtitle-caret' }, '›'),
             ),
-            h('div', { className: 'dsh-power-subtitle' },
-              effortName ? `${current?.provider ?? ''} · ${effortName}` : (current?.provider ?? '')),
           ),
           h('button', {
             type: 'button',
