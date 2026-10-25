@@ -47,7 +47,7 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.12.2'
+    const VERSION = '0.12.3'
     const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
     const CSS = `
@@ -290,27 +290,6 @@ window.__ModuleLoader__.load({
   top: 0;
   left: 0;
   will-change: left, top;
-}
-/* _TrackParticles_1m50z_38：MAX 档轨道上方的漂浮粒子栏 */
-.dsh-power-mtp {
-  inset-inline: 0;
-  pointer-events: none;
-  height: 24px;
-  position: absolute;
-  top: 50%;
-  overflow: hidden;
-  transform: translateY(-50%);
-}
-.dsh-power-mtp-particle {
-  background: #ffffffb8;
-  border-radius: 999px;
-  width: 3px;
-  height: 3px;
-  position: absolute;
-  box-shadow: 0 0 5px #ffffff57;
-  will-change: left, top;
-  transition-property: left, top;
-  transition-timing-function: cubic-bezier(0.45, 0, 0.55, 1);
 }
 /* _Burst_1m50z_76：76x76 爆发盒（MAX 到达时 16 粒弹出），锚在旋钮位置 */
 .dsh-power-burst-host {
@@ -714,43 +693,6 @@ window.__ModuleLoader__.load({
       return h('span', { className: 'dsh-power-burst', 'aria-hidden': true }, items)
     }
 
-    /* _MaxTrackParticles（max-track-particles chunk 逐行移植）：MAX 档时
-       14 粒漂浮在轨道上方 5~19% 高度带，按各自时长周期性跳位 */
-    const MTP_COUNT = 14
-    const MTP_BASE = 1.6
-    function hopState() {
-      return {
-        left: Math.round(4 + Math.random() * 92),
-        offsetX: Math.round((Math.random() - 0.5) * 8),
-        top: Math.round(12 + (Math.random() - 0.5) * 14),
-        durationScale: 0.8 + Math.random() * 1.2,
-        opacity: 0.4 + Math.random() * 0.6,
-        scale: 0.5 + Math.random() * 0.45,
-      }
-    }
-    function MaxTrackParticle({ index }) {
-      const [particle, setParticle] = React.useState(hopState)
-      React.useEffect(() => {
-        const id = setInterval(() => setParticle(hopState()), MTP_BASE * particle.durationScale * 1000)
-        return () => clearInterval(id)
-      }, [particle.durationScale])
-      return h('span', {
-        className: 'dsh-power-mtp-particle',
-        style: {
-          left: `calc(${particle.left}% + ${particle.offsetX}px)`,
-          top: `${particle.top}%`,
-          opacity: particle.opacity,
-          transform: `translate(-50%, -50%) scale(${particle.scale})`,
-          transitionDuration: `${MTP_BASE * particle.durationScale}s`,
-        },
-      })
-    }
-    function MaxTrackParticles() {
-      const items = []
-      for (let i = 0; i < MTP_COUNT; i += 1) items.push(h(MaxTrackParticle, { key: i, index: i }))
-      return h('span', { className: 'dsh-power-mtp', 'aria-hidden': true }, items)
-    }
-
     /* _MaxFill（max-fill chunk 逐行移植）：MAX 档填充的 WebGL 紫色
        metaball 辉光，GLSL 着色器为官方原版；reduced-motion 只画一帧 */
     const MAXFILL_VERT = `
@@ -1120,9 +1062,8 @@ window.__ModuleLoader__.load({
               style: { width: `calc(${fill}% + 14px)` },
               'data-max': isMax ? 'true' : 'false',
             },
-              // 官方分层：穿梭圆点恒在；MAX 时叠加 WebGL 辉光（官方无星形层）
-              // 官方 data-animation-active 门控：穿梭粒子只在拖拽时流动，静止不显示
-              dragging && h(FastTrackParticles, { percent: fill }),
+              // 官方形态：穿梭圆点常显（静止截图亦有），拖拽时随 fast-mode 加速
+              h(FastTrackParticles, { percent: fill }),
               isMax && h(MaxFill, { active: true, reducedMotion }),
             ),
           ),
