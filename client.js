@@ -47,7 +47,7 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.9.1'
+    const VERSION = '0.9.2'
     const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
     const CSS = `
@@ -101,8 +101,9 @@ window.__ModuleLoader__.load({
   padding: 16px;
   border: 0;
   border-radius: var(--dsw-radius-lg, 14px);
-  /* 官方卡片是实色：specific-menu 令牌在主题里带透明度，这里硬编码实色 */
-  background: #1c1c22;
+  /* 官方卡片底色即 specific-menu 令牌（含官方毛玻璃），随主题联动 */
+  background: var(--dsw-specific-menu, #1c1c22);
+  backdrop-filter: var(--dsw-menu-backdrop-filter, blur(24px));
   box-shadow: var(--dsw-elevation-prominent, 0 12px 36px rgba(0, 0, 0, 0.45));
   color: var(--dsw-alias-label-secondary, rgba(232, 238, 250, 0.72));
   font-size: 12px;
@@ -118,7 +119,7 @@ window.__ModuleLoader__.load({
 }
 .dsh-power-title {
   display: block;
-  max-width: 220px;
+  max-width: 100%;
   margin: 0 auto;
   font-size: 20px;
   font-weight: 700;
@@ -363,9 +364,12 @@ window.__ModuleLoader__.load({
   transform: translate(-50%, -50%) scale(1.15);
   box-shadow: 0 3px 14px rgba(0, 0, 0, 0.5), 0 0 0 6px rgba(77, 107, 254, 0.20);
 }
+/* 官方 ThumbSpring：按下瞬间的弹性回缩 */
+.dsh-power-hitzone[data-grab="true"] .dsh-power-knob {
+  transform: translate(-50%, -50%) scale(0.9);
+  transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
 
-/* 档位标签：激活只变色不变字重（字重会挤压相邻标签造成抖动） */
-.dsh-power-stops { display: flex; margin-top: 8px; }
 .dsh-power-stop-label {
   flex: 1;
   border: none;
@@ -395,7 +399,7 @@ window.__ModuleLoader__.load({
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  max-width: 180px;
+  max-width: 100%;
   padding: 1px 8px;
   border: none;
   border-radius: 8px;
@@ -949,6 +953,7 @@ window.__ModuleLoader__.load({
           'aria-valuenow': activeIndex,
           'aria-valuetext': efforts[activeIndex]?.name ?? '',
           'data-live': dragIndex !== null ? 'true' : 'false',
+          'data-grab': dragIndex !== null && shownIndex === dragIndex ? 'true' : 'false',
           'data-armed': armed ? 'true' : 'false',
           'data-burst': burst ? 'true' : 'false',
           onPointerDown,
@@ -978,15 +983,6 @@ window.__ModuleLoader__.load({
           isMax && h(MaxTrackParticles, null),
           burst && h('span', { className: 'dsh-power-burst-host', style: { left: `${fill}%` } }, h(Burst)),
           h('div', { className: 'dsh-power-knob', style: { left: `${fill}%` } }),
-        ),
-        count > 1 && h('div', { className: 'dsh-power-stops' },
-          efforts.map((effort, index) => h('button', {
-            key: effort.id ?? index,
-            type: 'button',
-            className: 'dsh-power-stop-label',
-            'data-active': index === shownIndex ? 'true' : 'false',
-            onClick: () => effort.id !== value && onPick(effort.id),
-          }, effort.name ?? effort.id)),
         ),
       )
     }
@@ -1235,8 +1231,7 @@ window.__ModuleLoader__.load({
         ? (effortName ? `${modelName} · ${effortName}` : modelName)
         : '选择推理强度'
 
-      // 面板从入口上方弹出，右缘对齐按钮右缘（Codex 实测：面板悬在
-      // 「选择推理强度」按钮上方，向左延展）。
+      // 面板与入口按钮居中对齐（Codex：卡片中线对准触发钮），越界时钳回视口
       React.useLayoutEffect(() => {
         if (!open) return
         const panel = panelRef.current
@@ -1244,7 +1239,8 @@ window.__ModuleLoader__.load({
         if (!panel || !seat) return
         const rect = seat.getBoundingClientRect()
         const width = panel.offsetWidth || 300
-        panel.style.left = `${Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))}px`
+        const centered = rect.left + rect.width / 2 - width / 2
+        panel.style.left = `${Math.max(8, Math.min(centered, window.innerWidth - width - 8))}px`
         panel.style.top = `${Math.max(8, rect.top - panel.offsetHeight - 8)}px`
       }, [open])
 
