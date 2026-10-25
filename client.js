@@ -347,6 +347,24 @@ window.__ModuleLoader__.load({
   to { opacity: 0; transform: translate(calc(-50% + var(--particle-x)), calc(-50% + var(--particle-y))) scale(0.55); }
 }
 /* _Fill/_Mask/_Canvas_1azzv：MAX 档 WebGL 紫色辉光（官方 MaxFill，GLSL 逐行移植） */
+/* MAX 档星屑：官方 SparkleFill 四角星 + 闪烁 */
+.dsh-power-sparkles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.dsh-power-sparkle {
+  position: absolute;
+  color: rgba(255, 255, 255, 0.92);
+  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.55));
+  transform: translate(-50%, -50%);
+  animation: dsh-power-sparkle-twinkle 2.2s ease-in-out infinite;
+}
+@keyframes dsh-power-sparkle-twinkle {
+  0%, 100% { opacity: 0.35; transform: translate(-50%, -50%) scale(0.7) rotate(0deg); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.15) rotate(18deg); }
+}
+@media (prefers-reduced-motion: reduce) { .dsh-power-sparkle { animation: none; } }
 .dsh-power-maxfill {
   position: absolute;
   inset: 0;
