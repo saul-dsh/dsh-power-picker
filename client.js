@@ -47,7 +47,7 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.12.1'
+    const VERSION = '0.12.2'
     const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
     const CSS = `
@@ -1121,7 +1121,8 @@ window.__ModuleLoader__.load({
               'data-max': isMax ? 'true' : 'false',
             },
               // 官方分层：穿梭圆点恒在；MAX 时叠加 WebGL 辉光（官方无星形层）
-              h(FastTrackParticles, { percent: fill }),
+              // 官方 data-animation-active 门控：穿梭粒子只在拖拽时流动，静止不显示
+              dragging && h(FastTrackParticles, { percent: fill }),
               isMax && h(MaxFill, { active: true, reducedMotion }),
             ),
           ),
