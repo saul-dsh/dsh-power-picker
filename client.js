@@ -47,7 +47,7 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.10.0'
+    const VERSION = '0.10.1'
     const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
     const CSS = `
@@ -245,9 +245,8 @@ window.__ModuleLoader__.load({
   background: var(--color-chart-blue, #3a83f7);
   transition: width var(--dsh-power-motion-duration, 0.3s) var(--dsh-power-motion-easing, ease);
 }
-/* 拖拽/滚动中：fill 与旋钮的位移不走过渡，1:1 跟手 */
-.dsh-power-hitzone[data-live="true"] .dsh-power-fill { transition: none; }
-.dsh-power-hitzone[data-live="true"] .dsh-power-knob { transition: box-shadow 160ms ease, transform 160ms ${EASE}; }
+/* 官方 data-dragging：拖拽中位移过渡时长降到 0.15s（阻尼跟手，非 1:1） */
+.dsh-power-hitzone[data-live="true"] { --dsh-power-motion-duration: 0.15s; }
 /* _FastTrackParticles_1m50z_1：填充内的移动粒子（官方 DOM 方案，非 canvas） */
 .dsh-power-ftp {
   pointer-events: none;
@@ -355,18 +354,44 @@ window.__ModuleLoader__.load({
 }
 .dsh-power-maxfill canvas { width: 100%; height: 100%; display: block; }
 @media (prefers-reduced-motion: reduce) { .dsh-power-maxfill { animation: none; } }
-/* _Tick_1bucx_40：4px 刻度点，多段过渡 */
+/* _Tick_1bucx_40：4px 刻度点，官方配色（选中白 30% / 未选中 description 50%）、
+   悬停放大 2 倍 + 降亮（官方 data-pointer-down=false hover 规则）、
+   滑条悬停时整排淡出缩小（官方 data-highlighted） */
 .dsh-power-tick {
   position: absolute;
   top: 50%;
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background-color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.5));
-  pointer-events: none;
+  background-color: currentColor;
+  color: color-mix(in srgb, rgba(232, 238, 250, 1) 50%, transparent);
+  pointer-events: auto;
+  cursor: var(--cursor-interaction, pointer);
   transform: translate(-50%, -50%);
   transition: background-color var(--dsh-power-motion-duration, 0.3s) var(--dsh-power-motion-easing, ease),
     opacity 0.2s ease-in-out, filter 0.12s ease, transform 0.12s ease;
+}
+.dsh-power-tick[data-selected="true"] { color: #ffffff4d; }
+.dsh-power-tick:hover {
+  filter: brightness(0.85);
+  transform: translate(-50%, -50%) scale(2);
+}
+.dsh-power-hitzone:hover .dsh-power-tick {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.75);
+}
+/* 官方端点标签：交互 150ms 后显示首末档位名 */
+.dsh-power-endlabels {
+  position: absolute;
+  inset-inline: 0;
+  top: calc(50% + 17px);
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+  font-size: 10.5px;
+  line-height: 1.3;
+  color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.5));
+  animation: dsh-power-fade 200ms ease both;
 }
 /* _Thumb_1bucx_12 + _ThumbScale：28px 白底、.5px 边、极轻阴影（官方 0 0 2px #0000001a） */
 .dsh-power-knob {
@@ -920,9 +945,20 @@ window.__ModuleLoader__.load({
      * 交互与动画：点击/拖拽按档位吸附，交互期间（拖拽或键盘逐档）走
      * data-live 1:1 跟手，松手与外部数值变化走 280ms 弹性过渡。
      */
+    /**
+     * 离散档位滑条——交互机制按官方 c3r 组件源码移植：
+     *  - 抓住偏移：按住旋钮拖动保持抓取点，不跳指针位置
+     *  - 拖拽中填充跟随**连续原始百分比**（0.15s 阻尼过渡），松手才吸附档位
+     *  - 滚轮换档：累积 ±30px 步进一档，160ms 无操作重置
+     *  - 按住 150ms 后显示两端端点标签（官方 areEndpointLabelsVisible）
+     *  - tween = 0.3s cubic-bezier(.23,1,.32,1)（官方 j3r 常量，CSS 过渡实现）
+     */
     function PowerSlider({ efforts, value, onPick }) {
       const trackRef = React.useRef(null)
-      const [dragIndex, setDragIndex] = React.useState(null)
+      const grabRef = React.useRef(null)
+      const wheelRef = React.useRef({ accumulated: 0, lastTime: 0 })
+      const [drag, setDrag] = React.useState(null)
+      const [labels, setLabels] = React.useState(false)
 
       // 官方 16ms 启用：挂载后短暂延迟才开启位移过渡，开面板时旋钮就位不飞入
       const [armed, setArmed] = React.useState(false)
@@ -930,7 +966,7 @@ window.__ModuleLoader__.load({
         const timer = setTimeout(() => setArmed(true), 16)
         return () => clearTimeout(timer)
       }, [])
-      // 官方 MaxBurst 近似：值到达最高档时星点一次性弹出
+      // 官方 MaxBurst：值到达最高档时 16 粒弹出
       const [burst, setBurst] = React.useState(false)
       React.useEffect(() => {
         if (efforts.length >= 3 && value === efforts[efforts.length - 1]?.id) {
@@ -942,33 +978,58 @@ window.__ModuleLoader__.load({
 
       const count = efforts.length
       const activeIndex = Math.max(0, efforts.findIndex((effort) => effort.id === value))
-      const shownIndex = dragIndex ?? activeIndex
-      const fill = stopPosition(shownIndex, count)
+      const shownIndex = drag ? drag.index : activeIndex
+      // 拖拽中用连续原始百分比（官方 ve 目标 = pe 原始值，非吸附档位）
+      const fill = drag ? drag.pct : stopPosition(activeIndex, count)
       const isMax = count >= 3 && value === efforts[count - 1]?.id
       const reducedMotion = typeof window !== 'undefined'
         && typeof window.matchMedia === 'function'
         && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-      const indexFromEvent = (event) => {
-        const rect = trackRef.current?.getBoundingClientRect()
-        if (!rect || rect.width === 0) return activeIndex
-        const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
-        return Math.round(ratio * (count - 1))
-      }
       const onPointerDown = (event) => {
         if (count <= 1 || event.button !== 0) return
         event.currentTarget.setPointerCapture?.(event.pointerId)
-        setDragIndex(indexFromEvent(event))
+        const rect = event.currentTarget.getBoundingClientRect()
+        const thumbOffset = event.clientX - rect.left - (fill / 100) * rect.width
+        grabRef.current = { trackStart: rect.left, trackWidth: rect.width, thumbOffset }
+        const pct = Math.min(100, Math.max(0, ((event.clientX - rect.left) / rect.width) * 100))
+        setDrag({ pct, index: Math.round((pct / 100) * (count - 1)) })
+        // 官方 C3r=150：按住 150ms 后显示端点标签
+        setTimeout(() => setDrag((current) => (current !== null ? (setLabels(true), current) : current)), 150)
       }
       const onPointerMove = (event) => {
-        if (dragIndex === null) return
-        setDragIndex(indexFromEvent(event))
+        const grab = grabRef.current
+        if (drag === null || grab === null) return
+        const raw = Math.min(1, Math.max(0, (event.clientX - grab.trackStart - grab.thumbOffset) / grab.trackWidth))
+        setDrag({ pct: raw * 100, index: Math.round(raw * (count - 1)) })
       }
       const onPointerUp = () => {
-        if (dragIndex === null) return
-        const index = dragIndex
-        setDragIndex(null)
+        if (drag === null) return
+        setLabels(false)
+        const index = drag.index
+        setDrag(null)
         const effort = efforts[index]
+        if (effort && effort.id !== value) onPick(effort.id)
+      }
+      // 官方滚轮换档：累积 ±30px 触发一步，方向反转或 160ms 停顿即重置
+      const onWheel = (event) => {
+        if (event.ctrlKey || count <= 1) return
+        event.preventDefault()
+        event.stopPropagation()
+        const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : -event.deltaY
+        if ('webkitDirectionInvertedFromDevice' in event && event.webkitDirectionInvertedFromDevice === true) delta *= -1
+        const step = event.deltaMode === WheelEvent.DOM_DELTA_PIXEL ? delta : Math.sign(delta) * 30
+        if (step === 0) return
+        const wheel = wheelRef.current
+        if (event.timeStamp - wheel.lastTime > 160 || Math.sign(step) !== Math.sign(wheel.accumulated)) wheel.accumulated = 0
+        wheel.lastTime = event.timeStamp
+        wheel.accumulated += step
+        if (Math.abs(wheel.accumulated) < 30) return
+        const direction = Math.sign(wheel.accumulated)
+        wheel.accumulated -= direction * 30
+        const next = Math.max(0, Math.min(shownIndex + direction, count - 1))
+        if (next === shownIndex) { wheel.accumulated = 0; return }
+        const effort = efforts[next]
         if (effort && effort.id !== value) onPick(effort.id)
       }
       const onKeyDown = (event) => {
@@ -994,20 +1055,21 @@ window.__ModuleLoader__.load({
           'aria-valuemax': Math.max(0, count - 1),
           'aria-valuenow': activeIndex,
           'aria-valuetext': efforts[activeIndex]?.name ?? '',
-          'data-live': dragIndex !== null ? 'true' : 'false',
-          'data-grab': dragIndex !== null && shownIndex === dragIndex ? 'true' : 'false',
+          'data-live': drag !== null ? 'true' : 'false',
           'data-armed': armed ? 'true' : 'false',
           'data-burst': burst ? 'true' : 'false',
           onPointerDown,
           onPointerMove,
           onPointerUp,
           onPointerCancel: onPointerUp,
+          onWheel,
           onKeyDown,
         },
           // 官方结构：Track 只含填充（overflow hidden 负责圆角裁剪）+ 官方
           // 粒子层；TickRail、Thumb、Burst 在 Root 层——28px 旋钮不被裁剪
           h('div', { className: 'dsh-power-track' },
-            h('div', { className: 'dsh-power-fill', style: { width: `${fill}%` } },
+            // 官方填充延伸到旋钮中心 + 半旋钮宽（clip 公式 - D3r/2）
+            h('div', { className: 'dsh-power-fill', style: { width: `calc(${fill}% + 14px)` } },
               h(FastTrackParticles, { percent: fill }),
               isMax && h(MaxFill, { active: true, reducedMotion }),
               // 官方图 2：蓝填充上的白色刻度点（随填充宽度裁剪）
@@ -1024,12 +1086,13 @@ window.__ModuleLoader__.load({
               ),
             ),
           ),
-          // 官方 TickRail：中间档位 4px 刻度点（首尾不画）
+          // 官方 TickRail：中间档位 4px 刻度点（首尾不画），data-selected 官方配色
           count > 2 && efforts.map((effort, index) => (
             index !== 0 && index !== count - 1
               ? h('span', {
                 key: `tick-${effort.id ?? index}`,
                 className: 'dsh-power-tick',
+                'data-selected': index === shownIndex ? 'true' : 'false',
                 style: { left: `${stopPosition(index, count)}%` },
               })
               : null
@@ -1037,6 +1100,11 @@ window.__ModuleLoader__.load({
           isMax && h(MaxTrackParticles, null),
           burst && h('span', { className: 'dsh-power-burst-host', style: { left: `${fill}%` } }, h(Burst)),
           h('div', { className: 'dsh-power-knob', style: { left: `${fill}%` } }),
+          // 官方端点标签：交互 150ms 后显示首末档位名（areEndpointLabelsVisible）
+          labels && count > 1 && h('div', { className: 'dsh-power-endlabels', 'aria-hidden': true },
+            h('span', null, efforts[0]?.name ?? ''),
+            h('span', null, efforts[count - 1]?.name ?? ''),
+          ),
         ),
       )
     }
