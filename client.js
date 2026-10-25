@@ -47,7 +47,7 @@ window.__ModuleLoader__.load({
     const ENDPOINT = '/api/dsh-power-picker'
     /** 遮蔽内置选择器：single 槽位只渲染 priority 最低的注册。 */
     const SHADOW_PRIORITY = -1
-    const VERSION = '0.11.2'
+    const VERSION = '0.11.3'
     const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
     const CSS = `
@@ -369,6 +369,15 @@ window.__ModuleLoader__.load({
   50% { opacity: 1; transform: translate(-50%, -50%) scale(1.15) rotate(18deg); }
 }
 @media (prefers-reduced-motion: reduce) { .dsh-power-sparkle { animation: none; } }
+/* 官方 g3r 变换层：粒子层跟随旋钮平移（(百分比-100)×n%），
+   圆点层 n=1、辉光层 n=-0.9（官方 Te 的系数）——两层反向视差 */
+.dsh-power-mfx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: transform var(--dsh-power-motion-duration, 0.3s) var(--dsh-power-motion-easing, ease);
+  will-change: transform;
+}
 .dsh-power-maxfill {
   position: absolute;
   inset: 0;
@@ -1170,9 +1179,12 @@ window.__ModuleLoader__.load({
               style: { width: `calc(${fill}% + 14px)` },
               'data-max': isMax ? 'true' : 'false',
             },
-              // 官方分层：穿梭圆点恒在；MAX 时叠加 SparkleFill 星屑 + WebGL 辉光
+              // 官方分层：穿梭圆点恒在；MAX 时叠加 SparkleFill 星屑（视差层）+ WebGL 辉光
               h(FastTrackParticles, { percent: fill }),
-              isMax && h(MaxSparkles, null),
+              isMax && h('span', {
+                className: 'dsh-power-mfx',
+                style: { transform: `translateX(calc((${fill} - 100) * -0.9%))` },
+              }, h(MaxSparkles, null)),
               isMax && h(MaxFill, { active: true, reducedMotion }),
               // 官方图 2：蓝填充上的白色刻度点（随填充宽度裁剪）
               count > 2 && h('div', { style: { position: 'absolute', inset: 0, overflow: 'hidden' } },
@@ -1202,7 +1214,10 @@ window.__ModuleLoader__.load({
               })
               : null
           )),
-          isMax && h(MaxTrackParticles, null),
+          isMax && h('span', {
+            className: 'dsh-power-mfx',
+            style: { transform: `translateX(calc((${fill} - 100) * 1%))` },
+          }, h(MaxTrackParticles, null)),
           burst && h('span', { className: 'dsh-power-burst-host', style: { left: `${fill}%` } }, h(Burst)),
           h('div', { ref: knobRef, className: 'dsh-power-knob', style: { left: `${fill}%` } }),
           // 官方端点标签：交互 150ms 后显示首末档位名（areEndpointLabelsVisible）
