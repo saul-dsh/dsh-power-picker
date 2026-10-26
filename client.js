@@ -959,17 +959,17 @@ window.__ModuleLoader__.load({
         // 官方同款：阻断文字选择启动（拖出滑条也不会选中文本）
         event.preventDefault()
         const rect = hitzoneRef.current.getBoundingClientRect()
-        const startPct = posRef.current
-        // 官方 thumbOffset：抓住偏移，拖动保持抓取点不跳指针
-        grabRef.current = {
-          start: rect.left,
-          width: rect.width,
-          offset: event.clientX - rect.left - (startPct / 100) * rect.width,
-        }
-        dragRef.current = { pct: startPct, index: activeIndex }
+        // 点击即跳：按下就把 thumb 移到指针位置，offset 归零让后续拖动直接跟随。
+        // 旧写法记的是「点击点 - 当前 thumb」的抓取偏移，可它只在 pointermove 里
+        // 生效，单击（按下即松开）永远不动，点两端时偏差最大。
+        const raw = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
+        const pct = raw * 100
+        const index = Math.round(raw * (count - 1))
+        grabRef.current = { start: rect.left, width: rect.width, offset: 0 }
+        dragRef.current = { pct, index }
         setDragging(true)
-        setPreviewIndex(activeIndex)
-        applyPos(startPct)
+        setPreviewIndex(index)
+        applyPos(pct)
         // 官方 C3r=150：按住 150ms 后显示端点标签
         setTimeout(() => setLabels(true), 150)
 
