@@ -521,6 +521,15 @@ window.__ModuleLoader__.load({
 }
 .dsh-power-model-row:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.07)); }
 .dsh-power-model-row[data-current="true"] { color: var(--dsw-alias-label-primary, rgba(232, 238, 250, 0.92)); }
+.dsh-power-model-price {
+  flex: 0 0 auto;
+  font-size: 10px; line-height: 16px; padding: 0 5px;
+  border-radius: 4px; font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-tertiary, rgba(232, 238, 250, 0.5));
+  background: var(--dsw-alias-bg-layer-1, rgba(255, 255, 255, 0.06));
+}
+.dsh-power-model-price[data-tone="warm"] { color: #f0b429; }
+.dsh-power-model-price[data-tone="cool"] { color: #4ade80; }
 .dsh-power-model-name {
   flex: 1;
   overflow: hidden;
@@ -576,6 +585,35 @@ window.__ModuleLoader__.load({
       style.id = STYLE_ID
       style.textContent = CSS
       document.head.appendChild(style)
+    }
+
+    /* -- 价格标记（数据来自 dsh-cost 的 /prices 档价端点） -------------- */
+
+    let priceCache = null // { at, data }
+    async function loadPrices() {
+      if (priceCache && Date.now() - priceCache.at < 10 * 60 * 1000) return priceCache.data
+      try {
+        const res = await fetch('/api/dsh-cost/prices', { cache: 'no-store' })
+        if (!res.ok) return null
+        const data = await res.json()
+        priceCache = { at: Date.now(), data }
+        return data
+      } catch { return null }
+    }
+    /** 模型 id → 档位：pro/reasoner 走 pro 档，其余（flash/chat/第三方）走 flash(默认) 档。 */
+    function tierKeyOf(modelId) {
+      return /pro|reasoner/i.test(String(modelId ?? '')) ? 'pro' : 'flash'
+    }
+    /** 当前峰谷下的输出价（USD/1M）；取不到返回 null。 */
+    function priceOf(data, modelId) {
+      if (!data) return null
+      const models = data.models ?? {}
+      const key = tierKeyOf(modelId)
+      const tier = key === 'pro'
+        ? Object.entries(models).find(([k]) => /pro/i.test(k))?.[1] ?? data.default
+        : Object.entries(models).find(([k]) => /flash/i.test(k))?.[1] ?? data.default
+      const t = data.peak === true ? tier?.peak : tier?.offPeak
+      return typeof t?.output === 'number' ? t.output : null
     }
 
     /* ---------------------------------------------------------------- */
@@ -1134,6 +1172,15 @@ window.__ModuleLoader__.load({
       // Codex 同款：点卡片上方的模型名展开模型列表选其他模型。
       const [pane, setPane] = React.useState('root')
 
+      // 价格标记：dsh-cost 的档价（flash/pro，峰谷感知）+ 当前模型基准 → 每行 ×N。
+      // 10 分钟缓存；cross-module 数据走 cost 的 /prices 端点，取不到就不显示。
+      const [priceIndex, setPriceIndex] = React.useState(priceCache?.data ?? null)
+      React.useEffect(() => {
+        let alive = true
+        void loadPrices().then((data) => { if (data && alive) setPriceIndex(data) })
+        return () => { alive = false }
+      }, [])
+
       const failure = state?.error ?? null
 
       const pickModel = (provider, modelId) => {
@@ -1237,6 +1284,15 @@ window.__ModuleLoader__.load({
                         const isCurrent = current
                           && group.id === current.provider
                           && entry.id === current.model
+                        // 相对当前模型的价格倍数：×1 不显示，>1 暖色提醒切贵
+                        let priceBadge = null
+                        const rowPrice = priceOf(priceIndex, entry.id)
+                        const basePrice = priceOf(priceIndex, current?.model)
+                        if (rowPrice && basePrice) {
+                          const ratio = rowPrice / basePrice
+                          if (ratio >= 1.05) priceBadge = { text: `×${ratio >= 10 ? Math.round(ratio) : ratio.toFixed(1)}`, tone: 'warm' }
+                          else if (ratio <= 0.95) priceBadge = { text: `×${ratio.toFixed(1)}`, tone: 'cool' }
+                        }
                         return h('button', {
                           key: `${group.id}:${entry.id}`,
                           type: 'button',
@@ -1249,6 +1305,13 @@ window.__ModuleLoader__.load({
                             style: { '--meter-tint': tintOf(groupIndex) },
                           }),
                           h('span', { className: 'dsh-power-model-name' }, entry.name ?? entry.id),
+                          priceBadge
+                            ? h('span', {
+                              className: 'dsh-power-model-price',
+                              'data-tone': priceBadge.tone,
+                              title: `输出价约为当前模型的 ${priceBadge.text}`,
+                            }, priceBadge.text)
+                            : null,
                           h('span', { className: 'dsh-power-model-check' }, '✓'),
                         )
                       }),
